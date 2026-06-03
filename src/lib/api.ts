@@ -90,6 +90,15 @@ export type TechnicianSchedule = {
     budget_value?: string | number | null;
     observations?: string | null;
     services_performed?: string | null;
+    technician_diagnosis?: string | null;
+    technician_solution?: string | null;
+    technician_observations?: string | null;
+    technician_attended_at?: string | null;
+    technician_local_payment_received?: boolean;
+    technician_local_payment_amount?: string | number | null;
+    technician_local_payment_method?: string | null;
+    technician_local_payment_notes?: string | null;
+    technician_local_payment_received_at?: string | null;
     service_cost?: string | number | null;
     delivery_forecast?: string | null;
     delivery_date?: string | null;
@@ -112,6 +121,13 @@ export type TechnicianSchedule = {
       has_check_out: boolean;
       has_technician_notes: boolean;
     };
+    order_payments?: {
+      id: number;
+      amount: string | number;
+      payment_method: string;
+      paid_at?: string | null;
+      notes?: string | null;
+    }[];
   } | null;
 };
 
@@ -122,6 +138,15 @@ export type TechnicianDashboard = {
     completed: number;
   };
   next_schedule?: TechnicianSchedule | null;
+};
+
+export type OrderImage = {
+  id: number;
+  tenant_id?: number | null;
+  order_id: number;
+  filename: string;
+  created_at?: string | null;
+  updated_at?: string | null;
 };
 
 export type PaginatedResult<T> = {
@@ -238,6 +263,26 @@ export async function getTechnicianSchedule(baseUrl: string, token: string, sche
   return request<TechnicianSchedule>(baseUrl, `/tecnico/agendamentos/${scheduleId}`, token);
 }
 
+export async function getOrderImages(baseUrl: string, token: string, orderNumber: number) {
+  return request<OrderImage[]>(baseUrl, `/images/${orderNumber}`, token);
+}
+
+export async function uploadOrderImage(baseUrl: string, token: string, orderNumber: number, base64Image: string) {
+  await request<{ message?: string }>(baseUrl, '/upload', token, {
+    method: 'POST',
+    body: JSON.stringify({
+      order_number: orderNumber,
+      filename: base64Image,
+    }),
+  });
+}
+
+export async function deleteOrderImage(baseUrl: string, token: string, imageId: number) {
+  await request<{ message?: string }>(baseUrl, `/deleteimage/${imageId}`, token, {
+    method: 'DELETE',
+  });
+}
+
 export async function updateTechnicianScheduleStatus(
   baseUrl: string,
   token: string,
@@ -247,6 +292,38 @@ export async function updateTechnicianScheduleStatus(
   },
 ) {
   return request<TechnicianSchedule>(baseUrl, `/tecnico/agendamentos/${scheduleId}/status`, token, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateTechnicianScheduleReport(
+  baseUrl: string,
+  token: string,
+  scheduleId: number,
+  payload: {
+    technician_diagnosis?: string | null;
+    technician_solution?: string | null;
+    technician_observations?: string | null;
+  },
+) {
+  return request<TechnicianSchedule>(baseUrl, `/tecnico/agendamentos/${scheduleId}/relatorio`, token, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function recordTechnicianSchedulePayment(
+  baseUrl: string,
+  token: string,
+  scheduleId: number,
+  payload: {
+    amount: number;
+    payment_method: 'pix' | 'cartao' | 'dinheiro' | 'transferencia';
+    notes?: string | null;
+  },
+) {
+  return request<TechnicianSchedule>(baseUrl, `/tecnico/agendamentos/${scheduleId}/pagamento`, token, {
     method: 'POST',
     body: JSON.stringify(payload),
   });

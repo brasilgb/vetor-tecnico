@@ -1,12 +1,13 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { useRouter } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
-import { Image, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
+import { Image, Linking, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppShell } from '@/components/app-shell';
 import { Card, Message, TextMuted, Title } from '@/components/ui-kit';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   ApiError,
   getTechnicianDashboard,
@@ -28,13 +29,13 @@ const agendaFilters: { label: string; value: AgendaPeriod }[] = [
 export default function AtendimentoScreen() {
   const colors = Colors[useColorScheme() ?? 'light'];
   const router = useRouter();
-  const { baseUrl, session, signOut } = useSession();
+  const { baseUrl, session } = useSession();
   const [dashboard, setDashboard] = useState<TechnicianDashboard | null>(null);
   const [schedules, setSchedules] = useState<TechnicianSchedule[]>([]);
   const [agendaPeriod, setAgendaPeriod] = useState<AgendaPeriod>('pending');
+  const [selectedSchedule, setSelectedSchedule] = useState<TechnicianSchedule | null>(null);
   const [loading, setLoading] = useState(false);
   const [statusLoadingId, setStatusLoadingId] = useState<number | null>(null);
-  const [logoutLoading, setLogoutLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   const token = session?.accessToken;
@@ -60,24 +61,31 @@ export default function AtendimentoScreen() {
     }
   }, [agendaPeriod, baseUrl, token]);
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData]),
+  );
 
-  async function handleLogout() {
-    setLogoutLoading(true);
-    await signOut();
-    setLogoutLoading(false);
-  }
-
-  async function startSchedule(schedule: TechnicianSchedule) {
+  async function updateScheduleStatus(schedule: TechnicianSchedule, status: 1 | 2) {
     if (!token) return;
 
     setStatusLoadingId(schedule.id);
     setMessage(null);
 
     try {
-      await updateTechnicianScheduleStatus(baseUrl, token, schedule.id, { status: 2 });
+      const updatedSchedule = await updateTechnicianScheduleStatus(baseUrl, token, schedule.id, { status });
+
+      setSelectedSchedule((current) => (current?.id === updatedSchedule.id ? updatedSchedule : current));
+      setSchedules((current) => current.map((item) => (item.id === updatedSchedule.id ? updatedSchedule : item)));
+      setDashboard((current) => {
+        if (!current?.next_schedule || current.next_schedule.id !== updatedSchedule.id) return current;
+
+        return {
+          ...current,
+          next_schedule: updatedSchedule,
+        };
+      });
       await loadData();
     } catch (error) {
       setMessage(error instanceof ApiError ? error.message : 'Nao foi possivel atualizar o status.');
@@ -99,6 +107,14 @@ export default function AtendimentoScreen() {
   return (
     <AppShell>
       <View style={[styles.workspaceHeader, { backgroundColor: colors.accent }]}>
+        <Pressable
+          disabled={loading}
+          onPress={loadData}
+          style={({ pressed }) => [styles.headerIconButton, { opacity: loading ? 0.58 : pressed ? 0.72 : 1 }]}
+          accessibilityRole="button"
+          accessibilityLabel="Atualizar agenda">
+          <MaterialIcons name={loading ? 'sync' : 'refresh'} size={21} color="#ffffff" />
+        </Pressable>
         <View style={styles.companyRow}>
           <View style={styles.companyLogoWrap}>
             <Image
@@ -114,17 +130,6 @@ export default function AtendimentoScreen() {
             </Text>
             <Text style={styles.operatorName}>{session.user.name}</Text>
           </View>
-        </View>
-
-        <View style={styles.headerActions}>
-          <Pressable onPress={loadData} style={({ pressed }) => [styles.headerButton, pressed && styles.pressed]}>
-            <MaterialIcons name="refresh" size={20} color="#ffffff" />
-            <Text style={styles.headerButtonText}>{loading ? 'Atualizando' : 'Atualizar'}</Text>
-          </Pressable>
-          <Pressable onPress={handleLogout} style={({ pressed }) => [styles.headerButton, pressed && styles.pressed]}>
-            <MaterialIcons name="logout" size={20} color="#ffffff" />
-            <Text style={styles.headerButtonText}>{logoutLoading ? 'Saindo' : 'Sair'}</Text>
-          </Pressable>
         </View>
       </View>
 
@@ -142,8 +147,8 @@ export default function AtendimentoScreen() {
             schedule={nextSchedule}
             featured
             loading={statusLoadingId === nextSchedule.id}
-            onOpen={() => router.push(`/agendamentos/${nextSchedule.id}` as never)}
-            onStart={startSchedule}
+            onOpen={() => setSelectedSchedule(nextSchedule)}
+            onUpdateStatus={updateScheduleStatus}
           />
         ) : (
           <EmptyState icon="event-available" title="Nenhum atendimento pendente" detail="Quando uma agenda for enviada ao tecnico, ela aparece aqui." />
@@ -176,8 +181,8 @@ export default function AtendimentoScreen() {
                 key={schedule.id}
                 schedule={schedule}
                 loading={statusLoadingId === schedule.id}
-                onOpen={() => router.push(`/agendamentos/${schedule.id}` as never)}
-                onStart={startSchedule}
+                onOpen={() => setSelectedSchedule(schedule)}
+                onUpdateStatus={updateScheduleStatus}
               />
             ))
           ) : (
@@ -185,6 +190,17 @@ export default function AtendimentoScreen() {
           )}
         </View>
       </Card>
+
+      <ScheduleDetailsModal
+        schedule={selectedSchedule}
+        loading={selectedSchedule ? statusLoadingId === selectedSchedule.id : false}
+        onClose={() => setSelectedSchedule(null)}
+        onUpdateStatus={updateScheduleStatus}
+        onOpenFull={(schedule) => {
+          setSelectedSchedule(null);
+          router.push(`/agendamentos/${schedule.id}` as never);
+        }}
+      />
     </AppShell>
   );
 }
@@ -232,19 +248,18 @@ function ScheduleCard({
   featured,
   loading,
   onOpen,
-  onStart,
+  onUpdateStatus,
 }: {
   schedule: TechnicianSchedule;
   featured?: boolean;
   loading?: boolean;
   onOpen: () => void;
-  onStart: (schedule: TechnicianSchedule) => void;
+  onUpdateStatus: (schedule: TechnicianSchedule, status: 1 | 2) => void;
 }) {
   const colors = Colors[useColorScheme() ?? 'light'];
-  const address = formatAddress(schedule);
-  const mapsUrl = schedule.customer?.quick_actions?.maps_url ?? getMapsUrl(address);
   const canUpdateStatus = schedule.available_actions?.can_update_status !== false && schedule.status !== 3;
   const isInService = schedule.status === 2;
+  const canRevert = isInService && !schedule.check_in?.at;
 
   return (
     <View style={[styles.scheduleCard, featured && styles.featuredSchedule, { borderColor: colors.border, backgroundColor: colors.card }]}>
@@ -266,21 +281,20 @@ function ScheduleCard({
             <StatusPill label={schedule.technician_status_label ?? schedule.status_label ?? 'Agendado'} status={schedule.status} />
           </View>
 
-          <View style={styles.essentialList}>
-            <DataItem icon="build" label="Servico" value={schedule.service ?? 'Nao informado'} />
-            <DataItem icon="confirmation-number" label="OS" value={schedule.order ? String(schedule.order.order_number) : 'Sem OS'} />
-            <DataItem icon="precision-manufacturing" label="Equipamento" value={formatEquipment(schedule)} />
-          </View>
-          {address ? <DataItem icon="place" label="Endereco" value={address} wide /> : null}
+          <Text style={[styles.summaryText, { color: colors.text }]} numberOfLines={2}>
+            {schedule.service ?? 'Servico nao informado'}
+          </Text>
+          <Text style={[styles.summaryMeta, { color: colors.mutedText }]} numberOfLines={1}>
+            {schedule.order ? `OS ${schedule.order.order_number}` : 'Sem OS'} · {formatEquipment(schedule)}
+          </Text>
 
           <View style={styles.scheduleActions}>
-            {mapsUrl ? <ActionButton icon="route" label="Rota" onPress={() => Linking.openURL(mapsUrl)} /> : null}
             {canUpdateStatus ? (
               <ActionButton
-                icon="play-circle"
-                label={isInService ? 'Em atendimento' : loading ? 'Enviando' : 'Iniciar'}
-                disabled={loading || isInService}
-                onPress={() => onStart(schedule)}
+                icon={canRevert ? 'undo' : 'play-circle'}
+                label={loading ? 'Enviando' : canRevert ? 'Reverter' : isInService ? 'Em atendimento' : 'Iniciar'}
+                disabled={loading || (isInService && !canRevert)}
+                onPress={() => onUpdateStatus(schedule, canRevert ? 1 : 2)}
               />
             ) : null}
             <ActionButton icon="visibility" label="Detalhes" onPress={onOpen} primary />
@@ -288,6 +302,75 @@ function ScheduleCard({
         </View>
       </View>
     </View>
+  );
+}
+
+function ScheduleDetailsModal({
+  schedule,
+  loading,
+  onClose,
+  onUpdateStatus,
+  onOpenFull,
+}: {
+  schedule: TechnicianSchedule | null;
+  loading: boolean;
+  onClose: () => void;
+  onUpdateStatus: (schedule: TechnicianSchedule, status: 1 | 2) => void;
+  onOpenFull: (schedule: TechnicianSchedule) => void;
+}) {
+  const colors = Colors[useColorScheme() ?? 'light'];
+  const insets = useSafeAreaInsets();
+
+  if (!schedule) return null;
+
+  const address = formatAddress(schedule);
+  const mapsUrl = schedule.customer?.quick_actions?.maps_url ?? getMapsUrl(address);
+  const canUpdateStatus = schedule.available_actions?.can_update_status !== false && schedule.status !== 3;
+  const isInService = schedule.status === 2;
+  const canRevert = isInService && !schedule.check_in?.at;
+
+  return (
+    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable style={styles.modalOverlay} onPress={onClose}>
+        <Pressable
+          style={[styles.modalSheet, { backgroundColor: colors.card, paddingBottom: Math.max(18, insets.bottom + 18) }]}
+          onPress={(event) => event.stopPropagation()}>
+          <View style={styles.modalHandle} />
+          <View style={styles.modalHeader}>
+            <View style={styles.modalTitleWrap}>
+              <Text style={[styles.scheduleNumber, { color: colors.mutedText }]}>Agenda #{schedule.schedules_number}</Text>
+              <Text style={[styles.modalTitle, { color: colors.text }]} numberOfLines={2}>
+                {schedule.customer?.name ?? 'Cliente nao informado'}
+              </Text>
+            </View>
+            <Pressable onPress={onClose} style={({ pressed }) => [styles.modalCloseButton, { backgroundColor: colors.muted }, pressed && styles.pressed]}>
+              <MaterialIcons name="close" size={20} color={colors.text} />
+            </Pressable>
+          </View>
+
+          <View style={styles.modalInfo}>
+            <DataItem icon="today" label="Horario" value={formatShortDateTime(schedule.schedules)} />
+            <DataItem icon="build" label="Servico" value={schedule.service ?? 'Nao informado'} />
+            <DataItem icon="confirmation-number" label="OS" value={schedule.order ? String(schedule.order.order_number) : 'Sem OS'} />
+            <DataItem icon="precision-manufacturing" label="Equipamento" value={formatEquipment(schedule)} />
+            {address ? <DataItem icon="place" label="Endereco" value={address} wide /> : null}
+          </View>
+
+          <View style={styles.scheduleActions}>
+            {mapsUrl ? <ActionButton icon="route" label="Rota" onPress={() => Linking.openURL(mapsUrl)} /> : null}
+            {canUpdateStatus ? (
+              <ActionButton
+                icon={canRevert ? 'undo' : 'play-circle'}
+                label={loading ? 'Enviando' : canRevert ? 'Reverter' : isInService ? 'Em atendimento' : 'Iniciar'}
+                disabled={loading || (isInService && !canRevert)}
+                onPress={() => onUpdateStatus(schedule, canRevert ? 1 : 2)}
+              />
+            ) : null}
+            <ActionButton icon="open-in-new" label="Atendimento" onPress={() => onOpenFull(schedule)} primary />
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
   );
 }
 
@@ -359,7 +442,9 @@ function ActionButton({
         },
       ]}>
       <MaterialIcons name={icon} size={18} color={primary ? '#ffffff' : colors.text} />
-      <Text style={[styles.actionText, { color: primary ? '#ffffff' : colors.text }]}>{label}</Text>
+      <Text style={[styles.actionText, { color: primary ? '#ffffff' : colors.text }]} numberOfLines={1}>
+        {label}
+      </Text>
     </Pressable>
   );
 }
@@ -381,6 +466,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 18,
     gap: 18,
+    position: 'relative',
   },
   companyRow: {
     flexDirection: 'row',
@@ -388,18 +474,16 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   companyLogoWrap: {
-    width: 64,
-    height: 64,
+    width: 54,
+    height: 54,
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.18)',
+    backgroundColor: 'transparent',
   },
   companyLogo: {
-    width: 48,
-    height: 48,
+    width: 40,
+    height: 40,
   },
   companyText: {
     flex: 1,
@@ -426,27 +510,16 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     fontWeight: '600',
   },
-  headerActions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  headerButton: {
-    minHeight: 42,
+  headerIconButton: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    width: 34,
+    height: 34,
     borderRadius: 8,
-    paddingHorizontal: 12,
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.16)',
-  },
-  headerButtonText: {
-    color: '#ffffff',
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: '800',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
   },
   summaryGrid: {
     flexDirection: 'row',
@@ -516,6 +589,7 @@ const styles = StyleSheet.create({
     borderLeftWidth: 4,
   },
   scheduleMain: {
+    width: '100%',
     alignItems: 'flex-start',
     gap: 12,
   },
@@ -529,6 +603,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 6,
     backgroundColor: '#15365f',
+  },
+  summaryText: {
+    fontSize: 15,
+    lineHeight: 21,
+    fontWeight: '800',
+  },
+  summaryMeta: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '700',
   },
   dateDay: {
     color: '#ffffff',
@@ -550,6 +634,8 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   scheduleContent: {
+    width: '100%',
+    alignSelf: 'stretch',
     flex: 1,
     minWidth: 0,
     gap: 12,
@@ -624,20 +710,26 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   scheduleActions: {
+    alignSelf: 'stretch',
     flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: 10,
   },
   actionButton: {
+    flex: 1,
+    flexBasis: 0,
+    minWidth: 0,
     minHeight: 42,
     borderWidth: 1,
     borderRadius: 8,
-    paddingHorizontal: 12,
+    paddingHorizontal: 8,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 8,
   },
   actionText: {
+    flexShrink: 1,
+    textAlign: 'center',
     fontSize: 13,
     fontWeight: '900',
   },
@@ -657,6 +749,50 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     fontWeight: '500',
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(15, 23, 36, 0.48)',
+  },
+  modalSheet: {
+    width: '100%',
+    maxHeight: '86%',
+    borderTopLeftRadius: 14,
+    borderTopRightRadius: 14,
+    padding: 18,
+    gap: 14,
+  },
+  modalHandle: {
+    width: 44,
+    height: 5,
+    borderRadius: 999,
+    backgroundColor: '#d8e0ea',
+    alignSelf: 'center',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  modalTitleWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  modalTitle: {
+    fontSize: 20,
+    lineHeight: 26,
+    fontWeight: '900',
+  },
+  modalCloseButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalInfo: {
+    gap: 10,
   },
   pressed: {
     opacity: 0.72,

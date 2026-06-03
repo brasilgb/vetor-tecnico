@@ -17,7 +17,7 @@
         "foregroundImage": "./assets/images/icon.png",
         "backgroundColor": "#0b1220"
       },
-      "edgeToEdgeEnabled": true,
+      "edgeToEdgeEnabled": false,
       "predictiveBackGestureEnabled": false,
       "package": "com.andersonbrodrigues.vetortecnico"
     },
@@ -27,6 +27,19 @@
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Permita que o VetorOS Técnico registre a localização no check-in e check-out do atendimento."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Permita que o VetorOS Técnico selecione fotos para anexar ao atendimento.",
+          "cameraPermission": "Permita que o VetorOS Técnico tire fotos do atendimento."
+        }
+      ],
       [
         "expo-splash-screen",
         {
