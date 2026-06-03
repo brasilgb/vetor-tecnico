@@ -24,15 +24,16 @@ const styles = StyleSheet.create({
   },
   content: {
     flexGrow: 1,
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 18,
   },
   centeredContent: {
     justifyContent: 'center',
   },
   inner: {
-    gap: 16,
+    gap: 18,
     width: '100%',
-    maxWidth: 920,
+    maxWidth: 1040,
     alignSelf: 'center',
   },
 });

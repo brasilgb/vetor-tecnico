@@ -20,111 +20,17 @@ export type ApiCompany = {
   logo_url?: string | null;
 };
 
-export type Customer = {
-  id: number;
-  tenant_id: number;
-  customer_number: number;
-  name: string;
-  cpfcnpj?: string | null;
-  email?: string | null;
-  phone?: string | null;
-  whatsapp?: string | null;
-  city?: string | null;
-  state?: string | null;
-  observations?: string | null;
-  created_at?: string;
-  updated_at?: string;
-};
-
-export type CustomerPayload = {
-  name: string;
-  cpfcnpj?: string;
-  birth?: string;
-  email?: string;
-  zipcode?: string;
-  state?: string;
-  city?: string;
-  district?: string;
-  street?: string;
-  complement?: string;
-  number?: number;
-  phone?: string;
-  contactname?: string;
-  whatsapp?: string;
-  contactphone?: string;
-  observations?: string;
-};
-
-export type Equipment = {
-  id: number;
-  equipment_number: number;
-  equipment: string;
-};
-
-export type ReportFilters = {
-  equipments: Equipment[];
-};
-
-export type Budget = {
-  id: number;
-  tenant_id: number;
-  budget_number: number;
-  equipment_id: number;
-  equipment?: {
-    id: number;
-    equipment_number: number;
-    equipment: string;
-  } | null;
-  model: string;
-  service: string;
-  description?: string | null;
-  estimated_time?: string | null;
-  part_value?: string | number | null;
-  labor_value?: string | number | null;
-  total_value?: string | number | null;
-  warranty?: string | null;
-  validity?: number | null;
-  obs?: string | null;
-  created_at?: string;
-  updated_at?: string;
-};
-
-export type BudgetResult = {
-  filters: {
-    equipment_id: number;
-    model: string;
-    service: string;
-  };
-  budgets: Budget[];
-};
-
-type ModelListResponse = {
-  equipment_id?: number;
-  models?: string[];
-  budgets?: Budget[];
-};
-
-type ServiceListResponse = {
-  equipment_id?: number;
-  model?: string;
-  services?: string[];
-  budgets?: Budget[];
-};
-
-export type BudgetQuery = {
-  equipment_id: number;
-  model: string;
-  service: string;
-};
-
 export type TechnicianSchedule = {
   id: number;
+  tenant_id?: number;
   schedules_number: number;
   schedules: string;
   service?: string | null;
   details?: string | null;
   status: number;
   status_label?: string | null;
+  observations?: string | null;
+  send_to_technician?: boolean;
   technician_status?: string | null;
   technician_status_label?: string | null;
   available_actions?: {
@@ -155,6 +61,8 @@ export type TechnicianSchedule = {
     name: string;
     phone?: string | null;
     whatsapp?: string | null;
+    email?: string | null;
+    observations?: string | null;
     address?: {
       zipcode?: string | null;
       state?: string | null;
@@ -173,8 +81,18 @@ export type TechnicianSchedule = {
   order?: {
     id: number;
     order_number: number;
+    tracking_token?: string | null;
     model?: string | null;
     defect?: string | null;
+    state_conservation?: string | null;
+    accessories?: string | null;
+    budget_description?: string | null;
+    budget_value?: string | number | null;
+    observations?: string | null;
+    services_performed?: string | null;
+    service_cost?: string | number | null;
+    delivery_forecast?: string | null;
+    delivery_date?: string | null;
     service_status?: number | null;
     service_status_label?: string | null;
     equipment?: {
@@ -300,63 +218,6 @@ export async function logout(baseUrl: string, token: string) {
   await request(baseUrl, '/logoutuser', token);
 }
 
-export async function getCustomers(baseUrl: string, token: string) {
-  return request<Customer[]>(baseUrl, '/clientes', token);
-}
-
-export async function createCustomer(baseUrl: string, token: string, payload: CustomerPayload) {
-  return request<Customer>(baseUrl, '/clientes/pre-cadastro', token, {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
-}
-
-export async function getReportFilters(baseUrl: string, token: string) {
-  return request<ReportFilters>(baseUrl, '/orcamentos/filtros', token);
-}
-
-export async function getBudgetModels(baseUrl: string, token: string, equipmentId: number) {
-  const params = new URLSearchParams({ equipment_id: String(equipmentId) });
-
-  const result = await request<ModelListResponse | string[] | Budget[]>(
-    baseUrl,
-    `/orcamentos/modelos?${params.toString()}`,
-    token,
-  );
-
-  return {
-    equipment_id: equipmentId,
-    models: normalizeModelList(result),
-  };
-}
-
-export async function getBudgetServices(baseUrl: string, token: string, equipmentId: number, model: string) {
-  const params = new URLSearchParams({ equipment_id: String(equipmentId), model });
-
-  const result = await request<ServiceListResponse | string[] | Budget[]>(
-    baseUrl,
-    `/orcamentos/servicos?${params.toString()}`,
-    token,
-  );
-
-  return {
-    equipment_id: equipmentId,
-    model,
-    services: normalizeServiceList(result),
-  };
-}
-
-export async function getBudgets(baseUrl: string, token: string, query: BudgetQuery) {
-  const params = new URLSearchParams();
-  Object.entries(query).forEach(([key, value]) => {
-    if (value !== undefined && value !== null && String(value).length > 0) {
-      params.set(key, String(value));
-    }
-  });
-
-  return request<BudgetResult>(baseUrl, `/orcamentos?${params.toString()}`, token);
-}
-
 export async function getTechnicianDashboard(baseUrl: string, token: string) {
   return request<TechnicianDashboard>(baseUrl, '/tecnico/dashboard', token);
 }
@@ -373,15 +234,16 @@ export async function getTechnicianSchedules(baseUrl: string, token: string, que
   return request<PaginatedResult<TechnicianSchedule>>(baseUrl, `/tecnico/agendamentos${suffix}`, token);
 }
 
+export async function getTechnicianSchedule(baseUrl: string, token: string, scheduleId: number) {
+  return request<TechnicianSchedule>(baseUrl, `/tecnico/agendamentos/${scheduleId}`, token);
+}
+
 export async function updateTechnicianScheduleStatus(
   baseUrl: string,
   token: string,
   scheduleId: number,
   payload: {
-    technician_status: string;
-    latitude?: number;
-    longitude?: number;
-    observations?: string;
+    status: 1 | 2 | 3;
   },
 ) {
   return request<TechnicianSchedule>(baseUrl, `/tecnico/agendamentos/${scheduleId}/status`, token, {
@@ -390,42 +252,34 @@ export async function updateTechnicianScheduleStatus(
   });
 }
 
-function normalizeModelList(result: ModelListResponse | string[] | Budget[]) {
-  if (Array.isArray(result)) {
-    return uniqueStrings(
-      result.map((item) => (typeof item === 'string' ? item : item.model)).filter((item): item is string => Boolean(item)),
-    );
-  }
-
-  if (Array.isArray(result.models)) {
-    return uniqueStrings(result.models);
-  }
-
-  if (Array.isArray(result.budgets)) {
-    return uniqueStrings(result.budgets.map((budget) => budget.model));
-  }
-
-  return [];
+export async function checkInTechnicianSchedule(
+  baseUrl: string,
+  token: string,
+  scheduleId: number,
+  payload: {
+    latitude?: number;
+    longitude?: number;
+    observations?: string;
+  },
+) {
+  return request<TechnicianSchedule>(baseUrl, `/tecnico/agendamentos/${scheduleId}/check-in`, token, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
 }
 
-function normalizeServiceList(result: ServiceListResponse | string[] | Budget[]) {
-  if (Array.isArray(result)) {
-    return uniqueStrings(
-      result.map((item) => (typeof item === 'string' ? item : item.service)).filter((item): item is string => Boolean(item)),
-    );
-  }
-
-  if (Array.isArray(result.services)) {
-    return uniqueStrings(result.services);
-  }
-
-  if (Array.isArray(result.budgets)) {
-    return uniqueStrings(result.budgets.map((budget) => budget.service));
-  }
-
-  return [];
-}
-
-function uniqueStrings(items: string[]) {
-  return Array.from(new Set(items.filter(Boolean))).sort((a, b) => a.localeCompare(b));
+export async function checkOutTechnicianSchedule(
+  baseUrl: string,
+  token: string,
+  scheduleId: number,
+  payload: {
+    latitude?: number;
+    longitude?: number;
+    observations?: string;
+  },
+) {
+  return request<TechnicianSchedule>(baseUrl, `/tecnico/agendamentos/${scheduleId}/check-out`, token, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
 }

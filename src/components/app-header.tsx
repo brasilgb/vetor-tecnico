@@ -97,14 +97,14 @@ function AvatarButton({ avatar, baseUrl, onPress }: { avatar: string; baseUrl: s
 
 const styles = StyleSheet.create({
   container: {
-    height: 80,
+    height: 74,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    backgroundColor: '#0b1220',
+    backgroundColor: '#15365f',
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(245, 244, 239, 0.12)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.14)',
   },
   side: {
     width: 44,
@@ -116,12 +116,12 @@ const styles = StyleSheet.create({
   iconButton: {
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#101a2d',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     borderWidth: 1,
-    borderColor: 'rgba(245, 244, 239, 0.12)',
+    borderColor: 'rgba(255, 255, 255, 0.16)',
   },
   pressed: {
     opacity: 0.72,
@@ -129,12 +129,12 @@ const styles = StyleSheet.create({
   logoWrap: {
     width: 48,
     height: 48,
-    borderRadius: 16,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#101a2d',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     borderWidth: 1,
-    borderColor: 'rgba(245, 244, 239, 0.12)',
+    borderColor: 'rgba(255, 255, 255, 0.16)',
   },
   logo: {
     width: 34,

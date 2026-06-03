@@ -5,11 +5,14 @@ import { useEffect, useState } from 'react';
 
 import { AppShell } from '@/components/app-shell';
 import { Button, Card, Field, Message, TextMuted } from '@/components/ui-kit';
+import { Colors } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 import { ApiError } from '@/lib/api';
 import { useSession } from '@/lib/session-context';
 
 export default function LoginScreen() {
   const { isRestoring, session, signIn } = useSession();
+  const colors = Colors[useColorScheme() ?? 'light'];
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -42,80 +45,122 @@ export default function LoginScreen() {
 
   return (
     <AppShell centered>
-      <View style={styles.brand}>
-        <View style={styles.logoCard}>
-          <Image source={require('@/assets/images/logo.png')} style={styles.logo} resizeMode="contain" />
+      <View style={styles.loginLayout}>
+        <View style={styles.brandPanel}>
+          <View style={styles.logoCard}>
+            <Image source={require('@/assets/images/logo.png')} style={styles.logo} resizeMode="contain" />
+          </View>
+          <Text style={styles.brandKicker}>Operacao tecnica</Text>
+          <Text style={styles.brandTitle}>VetorOS Tecnico</Text>
+          <Text style={styles.brandText}>Agenda, dados da OS e registros de execucao reunidos em uma area de trabalho objetiva.</Text>
         </View>
-        <Text style={styles.brandTitle}>VetorOS Atendimento</Text>
-        <TextMuted>Acesse o atendimento interno, clientes e orçamentos.</TextMuted>
-      </View>
 
-      <Card>
-        <Field
-          label="E-mail"
-          value={email}
-          onChangeText={setEmail}
-          autoCapitalize="none"
-          keyboardType="email-address"
-          leftIcon={<MaterialIcons name="mail" size={21} color="#a8b3c7" />}
-        />
-        <Field
-          label="Senha"
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry={!showPassword}
-          leftIcon={<MaterialIcons name="lock" size={21} color="#a8b3c7" />}
-          rightIcon={
-            <Pressable
-              onPress={() => setShowPassword((current) => !current)}
-              style={({ pressed }) => [styles.passwordButton, pressed && styles.pressed]}>
-              <MaterialIcons name={showPassword ? 'visibility-off' : 'visibility'} size={24} color="#a8b3c7" />
-            </Pressable>
-          }
-        />
-        {message ? <Message tone="error">{message}</Message> : null}
-        <Button onPress={handleLogin} loading={loading}>
-          Entrar
-        </Button>
-      </Card>
+        <Card style={styles.loginCard}>
+          <View>
+            <Text style={[styles.formTitle, { color: colors.text }]}>Acesso do tecnico</Text>
+            <TextMuted>Informe suas credenciais para abrir sua agenda.</TextMuted>
+          </View>
+          <Field
+            label="E-mail"
+            value={email}
+            onChangeText={setEmail}
+            autoCapitalize="none"
+            keyboardType="email-address"
+            leftIcon={<MaterialIcons name="mail" size={21} color="#637083" />}
+          />
+          <Field
+            label="Senha"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry={!showPassword}
+            leftIcon={<MaterialIcons name="lock" size={21} color="#637083" />}
+            rightIcon={
+              <Pressable
+                onPress={() => setShowPassword((current) => !current)}
+                style={({ pressed }) => [styles.passwordButton, pressed && styles.pressed]}>
+                <MaterialIcons name={showPassword ? 'visibility-off' : 'visibility'} size={24} color="#637083" />
+              </Pressable>
+            }
+          />
+          {message ? <Message tone="error">{message}</Message> : null}
+          <Button onPress={handleLogin} loading={loading}>
+            Entrar
+          </Button>
+        </Card>
+      </View>
     </AppShell>
   );
 }
 
 const styles = StyleSheet.create({
-  brand: {
-    alignItems: 'center',
-    marginBottom: 8,
-    gap: 8,
+  loginLayout: {
+    width: '100%',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'stretch',
+    gap: 18,
+  },
+  brandPanel: {
+    flexGrow: 1,
+    flexBasis: 320,
+    borderRadius: 8,
+    padding: 24,
+    justifyContent: 'center',
+    backgroundColor: '#15365f',
   },
   logoCard: {
-    width: 112,
-    height: 112,
-    borderRadius: 28,
+    width: 84,
+    height: 84,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#101a2d',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     borderWidth: 1,
-    borderColor: 'rgba(245, 244, 239, 0.12)',
+    borderColor: 'rgba(255, 255, 255, 0.16)',
   },
   logo: {
-    width: 82,
-    height: 82,
+    width: 62,
+    height: 62,
+  },
+  brandKicker: {
+    marginTop: 22,
+    color: 'rgba(255, 255, 255, 0.72)',
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '900',
+    textTransform: 'uppercase',
   },
   brandTitle: {
+    marginTop: 4,
+    color: '#ffffff',
+    fontSize: 31,
+    lineHeight: 38,
+    fontWeight: '900',
+  },
+  brandText: {
     marginTop: 12,
-    color: '#f5f4ef',
-    fontSize: 30,
-    lineHeight: 36,
-    fontWeight: '700',
-    textAlign: 'center',
+    color: 'rgba(255, 255, 255, 0.82)',
+    fontSize: 15,
+    lineHeight: 22,
+    fontWeight: '600',
+  },
+  loginCard: {
+    flexGrow: 1,
+    flexBasis: 340,
+    justifyContent: 'center',
+  },
+  formTitle: {
+    color: '#172033',
+    fontSize: 22,
+    lineHeight: 28,
+    fontWeight: '900',
   },
   passwordButton: {
     width: 40,
     height: 40,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 20,
+    borderRadius: 8,
   },
   pressed: {
     opacity: 0.72,

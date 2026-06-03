@@ -1,5 +1,4 @@
 import { PropsWithChildren, ReactNode } from 'react';
-import { Picker } from '@react-native-picker/picker';
 import {
   ActivityIndicator,
   Pressable,
@@ -53,42 +52,6 @@ export function Field({
           {...props}
         />
         {rightIcon}
-      </View>
-      {error ? <Text style={styles.fieldError}>{error}</Text> : null}
-    </View>
-  );
-}
-
-export function SelectField({
-  label,
-  value,
-  options,
-  onChange,
-  containerStyle,
-  error,
-}: {
-  label: string;
-  value: string;
-  options: { label: string; value: string }[];
-  onChange: (value: string) => void;
-  containerStyle?: ViewStyle;
-  error?: string;
-}) {
-  const colors = Colors[useColorScheme() ?? 'light'];
-
-  return (
-    <View style={[styles.field, containerStyle]}>
-      <Text style={[styles.label, { color: colors.mutedText }]}>{label}</Text>
-      <View style={[styles.selectWrap, { backgroundColor: colors.muted, borderColor: colors.border }]}>
-        <Picker
-          selectedValue={value}
-          onValueChange={(itemValue) => onChange(String(itemValue))}
-          dropdownIconColor={colors.mutedText}
-          style={[styles.select, { color: colors.text }]}>
-          {options.map((option) => (
-            <Picker.Item key={option.value || option.label} label={option.label} value={option.value} />
-          ))}
-        </Picker>
       </View>
       {error ? <Text style={styles.fieldError}>{error}</Text> : null}
     </View>
@@ -172,14 +135,14 @@ export function Message({ children, tone = 'info' }: PropsWithChildren<{ tone?: 
 const styles = StyleSheet.create({
   card: {
     borderWidth: 1,
-    borderRadius: 16,
-    padding: 20,
-    gap: 12,
+    borderRadius: 8,
+    padding: 18,
+    gap: 14,
   },
   title: {
-    fontSize: 22,
-    lineHeight: 28,
-    fontWeight: '700',
+    fontSize: 18,
+    lineHeight: 24,
+    fontWeight: '800',
   },
   muted: {
     fontSize: 14,
@@ -207,25 +170,14 @@ const styles = StyleSheet.create({
   inputWrap: {
     minHeight: 58,
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: 8,
     paddingHorizontal: 12,
     flexDirection: 'row',
     alignItems: 'center',
   },
-  selectWrap: {
-    minHeight: 58,
-    borderWidth: 1,
-    borderRadius: 12,
-    overflow: 'hidden',
-    justifyContent: 'center',
-  },
-  select: {
-    width: '100%',
-    minHeight: 58,
-  },
   button: {
     minHeight: 56,
-    borderRadius: 12,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 14,
@@ -236,7 +188,7 @@ const styles = StyleSheet.create({
   },
   chip: {
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
     maxWidth: 220,

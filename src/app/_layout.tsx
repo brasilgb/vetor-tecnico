@@ -16,12 +16,13 @@ export default function RootLayout() {
         }}>
         <Stack.Screen name="index" />
         <Stack.Screen
-          name="(tabs)"
+          name="home"
           options={{
             headerShown: true,
             header: () => <AppHeader user logout />,
           }}
         />
+        <Stack.Screen name="agendamentos/[id]" />
       </Stack>
       <StatusBar style="light" translucent />
     </SessionProvider>
