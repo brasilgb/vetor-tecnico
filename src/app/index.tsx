@@ -1,6 +1,6 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { router } from 'expo-router';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useEffect, useState } from 'react';
 
 import { AppShell } from '@/components/app-shell';
@@ -44,55 +44,60 @@ export default function LoginScreen() {
   }
 
   return (
-    <AppShell centered>
-      <View style={styles.loginLayout}>
-        <View style={styles.brandPanel}>
-          <View style={styles.logoCard}>
-            <Image source={require('@/assets/images/logo.png')} style={styles.logo} resizeMode="contain" />
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.keyboardView}>
+      <AppShell centered>
+        <View style={styles.loginLayout}>
+          <View style={styles.brandPanel}>
+            <View style={styles.logoCard}>
+              <Image source={require('@/assets/images/logo.png')} style={styles.logo} resizeMode="contain" />
+            </View>
+            <Text style={styles.brandKicker}>Operação técnica</Text>
+            <Text style={styles.brandTitle}>VetorOS Técnico</Text>
+            <Text style={styles.brandText}>Agenda, dados da OS e registros de execução reunidos em uma área de trabalho objetiva.</Text>
           </View>
-          <Text style={styles.brandKicker}>Operacao tecnica</Text>
-          <Text style={styles.brandTitle}>VetorOS Tecnico</Text>
-          <Text style={styles.brandText}>Agenda, dados da OS e registros de execucao reunidos em uma area de trabalho objetiva.</Text>
-        </View>
 
-        <Card style={styles.loginCard}>
-          <View>
-            <Text style={[styles.formTitle, { color: colors.text }]}>Acesso do tecnico</Text>
-            <TextMuted>Informe suas credenciais para abrir sua agenda.</TextMuted>
-          </View>
-          <Field
-            label="E-mail"
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            keyboardType="email-address"
-            leftIcon={<MaterialIcons name="mail" size={21} color="#637083" />}
-          />
-          <Field
-            label="Senha"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry={!showPassword}
-            leftIcon={<MaterialIcons name="lock" size={21} color="#637083" />}
-            rightIcon={
-              <Pressable
-                onPress={() => setShowPassword((current) => !current)}
-                style={({ pressed }) => [styles.passwordButton, pressed && styles.pressed]}>
-                <MaterialIcons name={showPassword ? 'visibility-off' : 'visibility'} size={24} color="#637083" />
-              </Pressable>
-            }
-          />
-          {message ? <Message tone="error">{message}</Message> : null}
-          <Button onPress={handleLogin} loading={loading}>
-            Entrar
-          </Button>
-        </Card>
-      </View>
-    </AppShell>
+          <Card style={styles.loginCard}>
+            <View>
+              <Text style={[styles.formTitle, { color: colors.text }]}>Acesso do técnico</Text>
+              <TextMuted>Informe suas credenciais para abrir sua agenda.</TextMuted>
+            </View>
+            <Field
+              label="E-mail"
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              leftIcon={<MaterialIcons name="mail" size={21} color="#637083" />}
+            />
+            <Field
+              label="Senha"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry={!showPassword}
+              leftIcon={<MaterialIcons name="lock" size={21} color="#637083" />}
+              rightIcon={
+                <Pressable
+                  onPress={() => setShowPassword((current) => !current)}
+                  style={({ pressed }) => [styles.passwordButton, pressed && styles.pressed]}>
+                  <MaterialIcons name={showPassword ? 'visibility-off' : 'visibility'} size={24} color="#637083" />
+                </Pressable>
+              }
+            />
+            {message ? <Message tone="error">{message}</Message> : null}
+            <Button onPress={handleLogin} loading={loading}>
+              Entrar
+            </Button>
+          </Card>
+        </View>
+      </AppShell>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
+  keyboardView: {
+    flex: 1,
+  },
   loginLayout: {
     width: '100%',
     flexDirection: 'row',

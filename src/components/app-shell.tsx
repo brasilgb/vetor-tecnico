@@ -1,17 +1,24 @@
-import { PropsWithChildren } from 'react';
+import { PropsWithChildren, RefObject } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Edge, SafeAreaView } from 'react-native-safe-area-context';
 
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
-export function AppShell({ children, centered }: PropsWithChildren<{ centered?: boolean }>) {
+export function AppShell({
+  children,
+  centered,
+  topSafeArea,
+  scrollRef,
+}: PropsWithChildren<{ centered?: boolean; topSafeArea?: boolean; scrollRef?: RefObject<ScrollView | null> }>) {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
+  const edges: Edge[] = topSafeArea ? ['top', 'bottom'] : ['bottom'];
 
   return (
-    <SafeAreaView edges={['bottom']} style={[styles.container, { backgroundColor: colors.background }]}>
+    <SafeAreaView edges={edges} style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView
+        ref={scrollRef}
         style={styles.scroll}
         contentContainerStyle={[styles.content, centered && styles.centeredContent]}
         keyboardShouldPersistTaps="handled">

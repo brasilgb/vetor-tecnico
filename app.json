@@ -13,13 +13,19 @@
       "bundleIdentifier": "com.andersonbrodrigues.vetortecnico"
     },
     "android": {
+      "permissions": [
+        "POST_NOTIFICATIONS",
+        "VIBRATE"
+      ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon.png",
         "backgroundColor": "#0b1220"
       },
-      "edgeToEdgeEnabled": false,
+      "usesCleartextTraffic": true,
+      "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.andersonbrodrigues.vetortecnico"
+      "package": "com.andersonbrodrigues.vetortecnico",
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "output": "static",
@@ -38,6 +44,13 @@
         {
           "photosPermission": "Permita que o VetorOS Técnico selecione fotos para anexar ao atendimento.",
           "cameraPermission": "Permita que o VetorOS Técnico tire fotos do atendimento."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#15365f",
+          "defaultChannel": "technician-schedules"
         }
       ],
       [

@@ -1,6 +1,7 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Image, Linking, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppShell } from '@/components/app-shell';
@@ -16,50 +17,141 @@ import {
   TechnicianSchedule,
   updateTechnicianScheduleStatus,
 } from '@/lib/api';
+import {
+  notifyNewTechnicianSchedulesLocally,
+  rememberTechnicianSchedulesForLocalNotifications,
+} from '@/lib/push-notifications';
 import { useSession } from '@/lib/session-context';
 
-type AgendaPeriod = 'pending' | 'today' | 'completed';
+type AgendaPeriod = 'pending' | 'today' | 'overdue' | 'completed';
+
+const LOCAL_NOTIFICATION_POLL_INTERVAL_MS = 30_000;
+
+type CachedHomeData = {
+  dashboard: TechnicianDashboard;
+  schedules: TechnicianSchedule[];
+  savedAt: string;
+};
+
+type CachedScheduleData = {
+  schedule: TechnicianSchedule;
+  savedAt?: string;
+};
+
+type PendingOfflineItem = {
+  scheduleId: number;
+  title: string;
+  detail: string;
+  savedAt?: string;
+};
+
+type ScheduleSection = 'images' | 'report';
 
 const agendaFilters: { label: string; value: AgendaPeriod }[] = [
   { label: 'Pendentes', value: 'pending' },
   { label: 'Hoje', value: 'today' },
-  { label: 'Concluidos', value: 'completed' },
+  { label: 'Atrasados', value: 'overdue' },
+  { label: 'Concluídos', value: 'completed' },
 ];
 
 export default function AtendimentoScreen() {
   const colors = Colors[useColorScheme() ?? 'light'];
   const router = useRouter();
-  const { baseUrl, session } = useSession();
+  const { baseUrl, session, signOut } = useSession();
+  const insets = useSafeAreaInsets();
   const [dashboard, setDashboard] = useState<TechnicianDashboard | null>(null);
   const [schedules, setSchedules] = useState<TechnicianSchedule[]>([]);
   const [agendaPeriod, setAgendaPeriod] = useState<AgendaPeriod>('pending');
   const [selectedSchedule, setSelectedSchedule] = useState<TechnicianSchedule | null>(null);
   const [loading, setLoading] = useState(false);
   const [statusLoadingId, setStatusLoadingId] = useState<number | null>(null);
+  const [pendingOfflineItems, setPendingOfflineItems] = useState<PendingOfflineItem[]>([]);
   const [message, setMessage] = useState<string | null>(null);
+  const localNotificationHistoryReady = useRef(false);
 
   const token = session?.accessToken;
+  const tenantId = session?.user.tenant_id;
 
   const loadData = useCallback(async () => {
-    if (!token) return;
+    if (!token || !tenantId) return;
 
     setLoading(true);
     setMessage(null);
+    setPendingOfflineItems(await getPendingOfflineItems(tenantId));
+    const cacheKey = getHomeCacheKey(tenantId, agendaPeriod);
+    const cachedData = await readCache<CachedHomeData>(cacheKey);
+
+    if (cachedData) {
+      setDashboard(cachedData.dashboard);
+      setSchedules(cachedData.schedules);
+    }
 
     try {
       const [dashboardResponse, schedulesResponse] = await Promise.all([
         getTechnicianDashboard(baseUrl, token),
         getTechnicianSchedules(baseUrl, token, { period: agendaPeriod, per_page: 10 }),
       ]);
+      const nextSchedules = schedulesResponse.data ?? [];
 
       setDashboard(dashboardResponse);
-      setSchedules(schedulesResponse.data ?? []);
+      setSchedules(nextSchedules);
+
+      if (agendaPeriod === 'pending') {
+        if (localNotificationHistoryReady.current) {
+          await notifyNewTechnicianSchedulesLocally(nextSchedules);
+        } else {
+          await rememberTechnicianSchedulesForLocalNotifications(nextSchedules);
+          localNotificationHistoryReady.current = true;
+        }
+      }
+
+      await AsyncStorage.setItem(
+        cacheKey,
+        JSON.stringify({
+          dashboard: dashboardResponse,
+          schedules: nextSchedules,
+          savedAt: new Date().toISOString(),
+        }),
+      );
     } catch (error) {
-      setMessage(error instanceof ApiError ? error.message : 'Nao foi possivel carregar os atendimentos.');
+      setMessage(error instanceof ApiError ? error.message : cachedData ? 'Sem conexão. Exibindo agenda salva.' : 'Não foi possível carregar os atendimentos.');
     } finally {
       setLoading(false);
     }
-  }, [agendaPeriod, baseUrl, token]);
+  }, [agendaPeriod, baseUrl, tenantId, token]);
+
+  useEffect(() => {
+    if (!token || !tenantId) return;
+
+    const accessToken = token;
+    let isMounted = true;
+
+    async function pollPendingSchedules() {
+      try {
+        const response = await getTechnicianSchedules(baseUrl, accessToken, { period: 'pending', per_page: 20 });
+        const pendingSchedules = response.data ?? [];
+
+        if (!isMounted) return;
+
+        if (localNotificationHistoryReady.current) {
+          await notifyNewTechnicianSchedulesLocally(pendingSchedules);
+        } else {
+          await rememberTechnicianSchedulesForLocalNotifications(pendingSchedules);
+          localNotificationHistoryReady.current = true;
+        }
+      } catch (error) {
+        console.warn('Nao foi possivel verificar novos agendamentos para notificacao local.', error);
+      }
+    }
+
+    pollPendingSchedules();
+    const interval = setInterval(pollPendingSchedules, LOCAL_NOTIFICATION_POLL_INTERVAL_MS);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [baseUrl, tenantId, token]);
 
   useFocusEffect(
     useCallback(() => {
@@ -88,11 +180,18 @@ export default function AtendimentoScreen() {
       });
       await loadData();
     } catch (error) {
-      setMessage(error instanceof ApiError ? error.message : 'Nao foi possivel atualizar o status.');
+      setMessage(error instanceof ApiError ? error.message : 'Não foi possível atualizar o status.');
     } finally {
       setStatusLoadingId(null);
     }
   }
+
+  const openScheduleSection = useCallback(
+    (schedule: TechnicianSchedule, section: ScheduleSection) => {
+      router.push(`/agendamentos/${schedule.id}?section=${section}` as never);
+    },
+    [router],
+  );
 
   if (!session) {
     return (
@@ -102,19 +201,37 @@ export default function AtendimentoScreen() {
     );
   }
 
-  const nextSchedule = dashboard?.next_schedule ?? (agendaPeriod === 'pending' ? schedules[0] : null);
+  const currentSchedule = dashboard?.current_schedule ?? schedules.find((schedule) => schedule.status === 2) ?? null;
+  const nextSchedule = currentSchedule ?? dashboard?.next_schedule ?? (agendaPeriod === 'pending' ? schedules[0] : null);
+  const primaryScheduleTitle = currentSchedule ? 'Atendimento em andamento' : 'Próximo atendimento';
 
   return (
     <AppShell>
-      <View style={[styles.workspaceHeader, { backgroundColor: colors.accent }]}>
-        <Pressable
-          disabled={loading}
-          onPress={loadData}
-          style={({ pressed }) => [styles.headerIconButton, { opacity: loading ? 0.58 : pressed ? 0.72 : 1 }]}
-          accessibilityRole="button"
-          accessibilityLabel="Atualizar agenda">
-          <MaterialIcons name={loading ? 'sync' : 'refresh'} size={21} color="#ffffff" />
-        </Pressable>
+      <View style={[styles.workspaceHeader, { backgroundColor: colors.accent, paddingTop: Math.max(18, insets.top + 12) }]}>
+        <View style={styles.headerActions}>
+          <View style={styles.headerActionGroup}>
+            <View style={styles.headerUserIcon}>
+              <MaterialIcons name="account-circle" size={24} color="#ffffff" />
+            </View>
+          </View>
+          <View style={[styles.headerActionGroup, styles.headerActionGroupRight]}>
+            <Pressable
+              disabled={loading}
+              onPress={loadData}
+              style={({ pressed }) => [styles.headerIconButton, { opacity: loading ? 0.58 : pressed ? 0.72 : 1 }]}
+              accessibilityRole="button"
+              accessibilityLabel="Atualizar agenda">
+              <MaterialIcons name={loading ? 'sync' : 'refresh'} size={21} color="#ffffff" />
+            </Pressable>
+            <Pressable
+              onPress={signOut}
+              style={({ pressed }) => [styles.headerIconButton, { opacity: pressed ? 0.72 : 1 }]}
+              accessibilityRole="button"
+              accessibilityLabel="Sair">
+              <MaterialIcons name="logout" size={21} color="#ffffff" />
+            </Pressable>
+          </View>
+        </View>
         <View style={styles.companyRow}>
           <View style={styles.companyLogoWrap}>
             <Image
@@ -124,7 +241,7 @@ export default function AtendimentoScreen() {
             />
           </View>
           <View style={styles.companyText}>
-            <Text style={styles.eyebrow}>Operacao tecnica</Text>
+            <Text style={styles.eyebrow}>Operação técnica</Text>
             <Text style={styles.companyName} numberOfLines={2}>
               {session.company?.name || 'VetorOS'}
             </Text>
@@ -138,20 +255,60 @@ export default function AtendimentoScreen() {
       <View style={styles.summaryGrid}>
         <SummaryCard label="Hoje" value={dashboard?.summary.today ?? 0} icon="today" tone="primary" />
         <SummaryCard label="Pendentes" value={dashboard?.summary.pending ?? 0} icon="pending-actions" tone="warning" />
+        <SummaryCard label="Em atendimento" value={dashboard?.summary.in_progress ?? 0} icon="engineering" tone="success" />
+        <SummaryCard label="Atrasados" value={dashboard?.summary.overdue ?? 0} icon="priority-high" tone="danger" />
       </View>
 
+      {pendingOfflineItems.length > 0 ? (
+        <Card>
+          <PanelHeader
+            title="Sincronização pendente"
+            detail={
+              pendingOfflineItems.length === 1
+                ? '1 atendimento com alterações offline'
+                : `${pendingOfflineItems.length} atendimentos com alterações offline`
+            }
+          />
+          <View style={styles.pendingOfflineList}>
+            {pendingOfflineItems.slice(0, 3).map((item) => (
+              <Pressable
+                key={item.scheduleId}
+                onPress={() => router.push(`/agendamentos/${item.scheduleId}` as never)}
+                style={({ pressed }) => [styles.pendingOfflineItem, { backgroundColor: colors.muted, borderColor: colors.border, opacity: pressed ? 0.72 : 1 }]}>
+                <View style={[styles.pendingOfflineIcon, { backgroundColor: `${colors.tint}18` }]}>
+                  <MaterialIcons name="sync-problem" size={19} color={colors.tint} />
+                </View>
+                <View style={styles.pendingOfflineText}>
+                  <Text style={[styles.pendingOfflineTitle, { color: colors.text }]}>{item.title}</Text>
+                  <Text style={[styles.pendingOfflineDetail, { color: colors.mutedText }]} numberOfLines={1}>
+                    {item.detail}
+                  </Text>
+                </View>
+                <MaterialIcons name="chevron-right" size={22} color={colors.icon} />
+              </Pressable>
+            ))}
+            {pendingOfflineItems.length > 3 ? (
+              <Text style={[styles.pendingOfflineMore, { color: colors.mutedText }]}>
+                {pendingOfflineMoreText(pendingOfflineItems.length - 3)}
+              </Text>
+            ) : null}
+          </View>
+        </Card>
+      ) : null}
+
       <Card>
-        <PanelHeader title="Proximo atendimento" detail={nextSchedule ? formatShortDateTime(nextSchedule.schedules) : 'Sem agenda pendente'} />
+        <PanelHeader title={primaryScheduleTitle} detail={nextSchedule ? primaryScheduleDetail(nextSchedule, currentSchedule) : 'Sem agenda pendente'} />
         {nextSchedule ? (
           <ScheduleCard
             schedule={nextSchedule}
             featured
             loading={statusLoadingId === nextSchedule.id}
             onOpen={() => setSelectedSchedule(nextSchedule)}
+            onOpenSection={openScheduleSection}
             onUpdateStatus={updateScheduleStatus}
           />
         ) : (
-          <EmptyState icon="event-available" title="Nenhum atendimento pendente" detail="Quando uma agenda for enviada ao tecnico, ela aparece aqui." />
+          <EmptyState icon="event-available" title="Nenhum atendimento pendente" detail="Quando uma agenda for enviada ao técnico, ela aparece aqui." />
         )}
       </Card>
 
@@ -182,6 +339,7 @@ export default function AtendimentoScreen() {
                 schedule={schedule}
                 loading={statusLoadingId === schedule.id}
                 onOpen={() => setSelectedSchedule(schedule)}
+                onOpenSection={openScheduleSection}
                 onUpdateStatus={updateScheduleStatus}
               />
             ))
@@ -225,10 +383,10 @@ function SummaryCard({
   label: string;
   value: number;
   icon: keyof typeof MaterialIcons.glyphMap;
-  tone: 'primary' | 'warning';
+  tone: 'primary' | 'warning' | 'success' | 'danger';
 }) {
   const colors = Colors[useColorScheme() ?? 'light'];
-  const toneColor = tone === 'primary' ? colors.tint : '#a05a00';
+  const toneColor = tone === 'primary' ? colors.tint : tone === 'success' ? colors.success : tone === 'danger' ? '#b42318' : '#a05a00';
 
   return (
     <View style={[styles.summaryCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -248,12 +406,14 @@ function ScheduleCard({
   featured,
   loading,
   onOpen,
+  onOpenSection,
   onUpdateStatus,
 }: {
   schedule: TechnicianSchedule;
   featured?: boolean;
   loading?: boolean;
   onOpen: () => void;
+  onOpenSection: (schedule: TechnicianSchedule, section: ScheduleSection) => void;
   onUpdateStatus: (schedule: TechnicianSchedule, status: 1 | 2) => void;
 }) {
   const colors = Colors[useColorScheme() ?? 'light'];
@@ -275,18 +435,20 @@ function ScheduleCard({
             <View style={styles.scheduleTitleWrap}>
               <Text style={[styles.scheduleNumber, { color: colors.mutedText }]}>Agenda #{schedule.schedules_number}</Text>
               <Text style={[styles.scheduleTitle, { color: colors.text }]} numberOfLines={2}>
-                {schedule.customer?.name ?? 'Cliente nao informado'}
+                {schedule.customer?.name ?? 'Cliente não informado'}
               </Text>
             </View>
             <StatusPill label={schedule.technician_status_label ?? schedule.status_label ?? 'Agendado'} status={schedule.status} />
           </View>
 
           <Text style={[styles.summaryText, { color: colors.text }]} numberOfLines={2}>
-            {schedule.service ?? 'Servico nao informado'}
+            {schedule.service ?? 'Serviço não informado'}
           </Text>
           <Text style={[styles.summaryMeta, { color: colors.mutedText }]} numberOfLines={1}>
             {schedule.order ? `OS ${schedule.order.order_number}` : 'Sem OS'} · {formatEquipment(schedule)}
           </Text>
+
+          {schedule.order ? <ScheduleBadges schedule={schedule} onOpenSection={onOpenSection} /> : null}
 
           <View style={styles.scheduleActions}>
             {canUpdateStatus ? (
@@ -301,6 +463,42 @@ function ScheduleCard({
           </View>
         </View>
       </View>
+    </View>
+  );
+}
+
+function ScheduleBadges({
+  schedule,
+  onOpenSection,
+}: {
+  schedule: TechnicianSchedule;
+  onOpenSection: (schedule: TechnicianSchedule, section: ScheduleSection) => void;
+}) {
+  const colors = Colors[useColorScheme() ?? 'light'];
+  const mobileSummary = schedule.order?.mobile_summary;
+  const imagesCount = mobileSummary?.images_count ?? 0;
+  const hasReport = Boolean(mobileSummary?.has_technician_notes || schedule.order?.technician_diagnosis || schedule.order?.technician_solution);
+
+  return (
+    <View style={styles.scheduleBadges}>
+      <Pressable
+        onPress={() => onOpenSection(schedule, 'images')}
+        style={({ pressed }) => [
+          styles.scheduleBadge,
+          { backgroundColor: colors.muted, borderColor: colors.border, opacity: pressed ? 0.72 : 1 },
+        ]}>
+        <MaterialIcons name="photo-library" size={16} color={colors.tint} />
+        <Text style={[styles.scheduleBadgeText, { color: colors.text }]}>Fotos {imagesCount}</Text>
+      </Pressable>
+      <Pressable
+        onPress={() => onOpenSection(schedule, 'report')}
+        style={({ pressed }) => [
+          styles.scheduleBadge,
+          { backgroundColor: colors.muted, borderColor: colors.border, opacity: pressed ? 0.72 : 1 },
+        ]}>
+        <MaterialIcons name={hasReport ? 'assignment-turned-in' : 'assignment'} size={16} color={hasReport ? colors.success : colors.tint} />
+        <Text style={[styles.scheduleBadgeText, { color: colors.text }]}>{hasReport ? 'Relatório salvo' : 'Relatório'}</Text>
+      </Pressable>
     </View>
   );
 }
@@ -340,7 +538,7 @@ function ScheduleDetailsModal({
             <View style={styles.modalTitleWrap}>
               <Text style={[styles.scheduleNumber, { color: colors.mutedText }]}>Agenda #{schedule.schedules_number}</Text>
               <Text style={[styles.modalTitle, { color: colors.text }]} numberOfLines={2}>
-                {schedule.customer?.name ?? 'Cliente nao informado'}
+                {schedule.customer?.name ?? 'Cliente não informado'}
               </Text>
             </View>
             <Pressable onPress={onClose} style={({ pressed }) => [styles.modalCloseButton, { backgroundColor: colors.muted }, pressed && styles.pressed]}>
@@ -349,11 +547,11 @@ function ScheduleDetailsModal({
           </View>
 
           <View style={styles.modalInfo}>
-            <DataItem icon="today" label="Horario" value={formatShortDateTime(schedule.schedules)} />
-            <DataItem icon="build" label="Servico" value={schedule.service ?? 'Nao informado'} />
+            <DataItem icon="today" label="Horário" value={formatShortDateTime(schedule.schedules)} />
+            <DataItem icon="build" label="Serviço" value={schedule.service ?? 'Não informado'} />
             <DataItem icon="confirmation-number" label="OS" value={schedule.order ? String(schedule.order.order_number) : 'Sem OS'} />
             <DataItem icon="precision-manufacturing" label="Equipamento" value={formatEquipment(schedule)} />
-            {address ? <DataItem icon="place" label="Endereco" value={address} wide /> : null}
+            {address ? <DataItem icon="place" label="Endereço" value={address} wide /> : null}
           </View>
 
           <View style={styles.scheduleActions}>
@@ -463,10 +661,38 @@ function EmptyState({ icon, title, detail }: { icon: keyof typeof MaterialIcons.
 
 const styles = StyleSheet.create({
   workspaceHeader: {
+    marginHorizontal: -16,
+    marginTop: -18,
+    borderBottomLeftRadius: 22,
+    borderBottomRightRadius: 22,
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    paddingBottom: 22,
+    gap: 20,
+    overflow: 'hidden',
+  },
+  headerActions: {
+    minHeight: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  headerActionGroup: {
+    minWidth: 82,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  headerActionGroupRight: {
+    justifyContent: 'flex-end',
+  },
+  headerUserIcon: {
+    width: 38,
+    height: 38,
     borderRadius: 8,
-    padding: 18,
-    gap: 18,
-    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
   },
   companyRow: {
     flexDirection: 'row',
@@ -511,15 +737,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   headerIconButton: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    width: 34,
-    height: 34,
+    width: 38,
+    height: 38,
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'transparent',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
   },
   summaryGrid: {
     flexDirection: 'row',
@@ -553,6 +776,45 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     fontWeight: '700',
+  },
+  pendingOfflineList: {
+    gap: 10,
+  },
+  pendingOfflineItem: {
+    minHeight: 62,
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  pendingOfflineIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pendingOfflineText: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  pendingOfflineTitle: {
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '900',
+  },
+  pendingOfflineDetail: {
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: '700',
+  },
+  pendingOfflineMore: {
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: '800',
   },
   panelHeader: {
     flexDirection: 'row',
@@ -613,6 +875,25 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     fontWeight: '700',
+  },
+  scheduleBadges: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  scheduleBadge: {
+    minHeight: 34,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  scheduleBadgeText: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '900',
   },
   dateDay: {
     color: '#ffffff',
@@ -833,7 +1114,8 @@ function getMapsUrl(address: string | null) {
 
 function agendaTitle(period: AgendaPeriod) {
   if (period === 'today') return 'Agenda de hoje';
-  if (period === 'completed') return 'Atendimentos concluidos';
+  if (period === 'overdue') return 'Atendimentos atrasados';
+  if (period === 'completed') return 'Atendimentos concluídos';
 
   return 'Agenda pendente';
 }
@@ -842,23 +1124,37 @@ function agendaDetail(period: AgendaPeriod, total: number) {
   const suffix = total === 1 ? '1 registro' : `${total} registros`;
 
   if (period === 'today') return `${suffix} programados para hoje`;
+  if (period === 'overdue') return `${suffix} com prazo vencido`;
   if (period === 'completed') return `${suffix} finalizados`;
 
-  return `${suffix} aguardando execucao`;
+  return `${suffix} aguardando execução`;
 }
 
 function emptyAgendaDetail(period: AgendaPeriod) {
-  if (period === 'today') return 'Nao ha atendimentos programados para hoje.';
-  if (period === 'completed') return 'Nenhum atendimento concluido encontrado.';
+  if (period === 'today') return 'Não há atendimentos programados para hoje.';
+  if (period === 'overdue') return 'Não há atendimentos atrasados.';
+  if (period === 'completed') return 'Nenhum atendimento concluído encontrado.';
 
-  return 'Nao ha agendamentos pendentes para este tecnico.';
+  return 'Não há agendamentos pendentes para este técnico.';
+}
+
+function primaryScheduleDetail(schedule: TechnicianSchedule, currentSchedule: TechnicianSchedule | null) {
+  if (currentSchedule?.id === schedule.id) return 'Continue o atendimento iniciado';
+
+  return formatShortDateTime(schedule.schedules);
+}
+
+function pendingOfflineMoreText(total: number) {
+  if (total === 1) return '+1 atendimento aguardando sincronização';
+
+  return `+${total} atendimentos aguardando sincronização`;
 }
 
 function formatEquipment(schedule: TechnicianSchedule) {
   const equipment = schedule.order?.equipment?.equipment;
   const model = schedule.order?.model;
 
-  return [equipment, model].filter(Boolean).join(' - ') || 'Nao informado';
+  return [equipment, model].filter(Boolean).join(' - ') || 'Não informado';
 }
 
 function parseDate(value: string) {
@@ -889,4 +1185,57 @@ function formatShortDateTime(value: string) {
     hour: '2-digit',
     minute: '2-digit',
   }).format(date);
+}
+
+function getHomeCacheKey(tenantId: number, period: AgendaPeriod) {
+  return `@VetorTecnico:home:${tenantId}:${period}`;
+}
+
+async function getPendingOfflineItems(tenantId: number): Promise<PendingOfflineItem[]> {
+  const keys = await AsyncStorage.getAllKeys();
+  const prefix = getPendingSchedulePrefix(tenantId);
+  const pendingKeys = keys.filter((key) => key.startsWith(prefix));
+  const items = await Promise.all(
+    pendingKeys.map(async (key): Promise<PendingOfflineItem | null> => {
+      const scheduleId = Number(key.replace(prefix, ''));
+
+      if (!Number.isFinite(scheduleId)) return null;
+
+      const pending = await readCache<{ savedAt?: string }>(key);
+      const cachedSchedule = await readCache<CachedScheduleData>(getScheduleCacheKey(tenantId, scheduleId));
+      const schedule = cachedSchedule?.schedule;
+
+      return {
+        scheduleId,
+        title: schedule ? `Agenda #${schedule.schedules_number}` : `Agenda ${scheduleId}`,
+        detail: schedule?.customer?.name ?? 'Atendimento aguardando sincronização',
+        savedAt: pending?.savedAt,
+      };
+    }),
+  );
+
+  return items
+    .filter((item): item is PendingOfflineItem => Boolean(item))
+    .sort((first, second) => (second.savedAt ?? '').localeCompare(first.savedAt ?? ''));
+}
+
+function getPendingSchedulePrefix(tenantId: number) {
+  return `@VetorTecnico:pending-schedule:${tenantId}:`;
+}
+
+function getScheduleCacheKey(tenantId: number, scheduleId: number) {
+  return `@VetorTecnico:schedule:${tenantId}:${scheduleId}`;
+}
+
+async function readCache<T>(key: string) {
+  const value = await AsyncStorage.getItem(key);
+
+  if (!value) return null;
+
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    await AsyncStorage.removeItem(key);
+    return null;
+  }
 }

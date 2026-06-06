@@ -93,6 +93,8 @@ export type TechnicianSchedule = {
     technician_diagnosis?: string | null;
     technician_solution?: string | null;
     technician_observations?: string | null;
+    technician_checklist_items?: string[];
+    technician_checklist_completed_at?: string | null;
     technician_attended_at?: string | null;
     technician_local_payment_received?: boolean;
     technician_local_payment_amount?: string | number | null;
@@ -108,6 +110,7 @@ export type TechnicianSchedule = {
       id: number;
       equipment_number?: number;
       equipment?: string | null;
+      checklist_items?: string[];
     } | null;
     mobile_summary?: {
       images_count: number;
@@ -135,8 +138,11 @@ export type TechnicianDashboard = {
   summary: {
     today: number;
     pending: number;
+    in_progress?: number;
+    overdue?: number;
     completed: number;
   };
+  current_schedule?: TechnicianSchedule | null;
   next_schedule?: TechnicianSchedule | null;
 };
 
@@ -158,7 +164,7 @@ export type PaginatedResult<T> = {
 };
 
 export type TechnicianScheduleQuery = {
-  period?: 'today' | 'tomorrow' | 'week' | 'pending' | 'completed';
+  period?: 'today' | 'tomorrow' | 'week' | 'pending' | 'overdue' | 'completed';
   date_from?: string;
   date_to?: string;
   status?: number;
@@ -204,7 +210,11 @@ async function request<T>(
   const json = (await response.json().catch(() => ({}))) as Partial<ApiEnvelope<T>>;
 
   if (!response.ok) {
-    throw new ApiError(json.message ?? 'Nao foi possivel concluir a requisicao.', response.status, json.errors);
+    if (response.status === 401) {
+      throw new ApiError('Sessão expirada. Entre novamente.', response.status, json.errors);
+    }
+
+    throw new ApiError(json.message ?? 'Não foi possível concluir a requisição.', response.status, json.errors);
   }
 
   return json.result as T;
@@ -225,7 +235,7 @@ export async function login(baseUrl: string, email: string, password: string) {
   };
 
   if (!response.ok) {
-    throw new ApiError(json.message ?? 'Nao foi possivel fazer login.', response.status, json.errors);
+    throw new ApiError(json.message ?? 'Não foi possível fazer login.', response.status, json.errors);
   }
 
   if (!json.result || !json.access_token) {
@@ -241,6 +251,30 @@ export async function login(baseUrl: string, email: string, password: string) {
 
 export async function logout(baseUrl: string, token: string) {
   await request(baseUrl, '/logoutuser', token);
+}
+
+export async function registerTechnicianPushToken(
+  baseUrl: string,
+  token: string,
+  payload: {
+    expo_push_token: string;
+    platform?: string;
+    device_name?: string | null;
+  },
+) {
+  return request<{ id: number; registered: boolean }>(baseUrl, '/tecnico/push-token', token, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteTechnicianPushToken(baseUrl: string, token: string, expoPushToken: string) {
+  return request<{ registered: boolean }>(baseUrl, '/tecnico/push-token', token, {
+    method: 'DELETE',
+    body: JSON.stringify({
+      expo_push_token: expoPushToken,
+    }),
+  });
 }
 
 export async function getTechnicianDashboard(baseUrl: string, token: string) {
@@ -308,6 +342,20 @@ export async function updateTechnicianScheduleReport(
   },
 ) {
   return request<TechnicianSchedule>(baseUrl, `/tecnico/agendamentos/${scheduleId}/relatorio`, token, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateTechnicianScheduleChecklist(
+  baseUrl: string,
+  token: string,
+  scheduleId: number,
+  payload: {
+    items: string[];
+  },
+) {
+  return request<TechnicianSchedule>(baseUrl, `/tecnico/agendamentos/${scheduleId}/checklist`, token, {
     method: 'POST',
     body: JSON.stringify(payload),
   });

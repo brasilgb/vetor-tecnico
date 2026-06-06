@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "420598334938",
+    "project_id": "pushtecnico",
+    "storage_bucket": "pushtecnico.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:420598334938:android:cd814845b07bac8ca2ece3",
+        "android_client_info": {
+          "package_name": "com.andersonbrodrigues.vetortecnico"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAfb3Jqgac0_39AaMeANetTdEz_as94p_s"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

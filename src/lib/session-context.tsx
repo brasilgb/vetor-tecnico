@@ -1,8 +1,15 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { createContext, PropsWithChildren, useContext, useEffect, useMemo, useState } from 'react';
+import { Alert } from 'react-native';
 
 import { ApiCompany, ApiError, ApiUser, login as loginRequest, logout as logoutRequest } from '@/lib/api';
+import {
+  clearTechnicianLocalNotificationHistory,
+  listenForTechnicianNotificationResponses,
+  registerForTechnicianPushNotifications,
+  unregisterTechnicianPushNotifications,
+} from '@/lib/push-notifications';
 
 type Session = {
   accessToken: string;
@@ -45,6 +52,25 @@ export function SessionProvider({ children }: PropsWithChildren) {
     restoreSession();
   }, []);
 
+  useEffect(() => {
+    if (!session) {
+      return;
+    }
+
+    registerForTechnicianPushNotifications(DEFAULT_BASE_URL, session.accessToken).catch((error) => {
+      console.warn('Nao foi possivel registrar notificacoes push do tecnico.', error);
+
+      if (__DEV__) {
+        Alert.alert('Notificações', error instanceof Error ? error.message : 'Não foi possível registrar notificações push.');
+      }
+    });
+    const subscription = listenForTechnicianNotificationResponses();
+
+    return () => {
+      subscription.remove();
+    };
+  }, [session]);
+
   const value = useMemo<SessionContextValue>(
     () => ({
       baseUrl: DEFAULT_BASE_URL,
@@ -71,8 +97,10 @@ export function SessionProvider({ children }: PropsWithChildren) {
       },
       async signOut() {
         if (session) {
+          await unregisterTechnicianPushNotifications(DEFAULT_BASE_URL, session.accessToken);
           await logoutRequest(DEFAULT_BASE_URL, session.accessToken).catch(() => undefined);
         }
+        await clearTechnicianLocalNotificationHistory();
         await AsyncStorage.removeItem(STORAGE_SESSION);
         setSession(null);
         router.replace('/' as never);

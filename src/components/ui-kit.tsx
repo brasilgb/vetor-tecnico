@@ -62,20 +62,22 @@ export function Button({
   children,
   onPress,
   loading,
+  disabled,
   variant = 'primary',
-}: PropsWithChildren<{ onPress: () => void; loading?: boolean; variant?: 'primary' | 'secondary' }>) {
+}: PropsWithChildren<{ onPress?: () => void; loading?: boolean; disabled?: boolean; variant?: 'primary' | 'secondary' }>) {
   const colors = Colors[useColorScheme() ?? 'light'];
   const isPrimary = variant === 'primary';
+  const isDisabled = Boolean(disabled || loading || !onPress);
 
   return (
     <Pressable
-      disabled={loading}
+      disabled={isDisabled}
       onPress={onPress}
       style={({ pressed }) => [
         styles.button,
         {
           backgroundColor: isPrimary ? colors.tint : colors.muted,
-          opacity: pressed || loading ? 0.72 : 1,
+          opacity: isDisabled ? 0.58 : pressed ? 0.72 : 1,
         },
       ]}>
       {loading ? (
