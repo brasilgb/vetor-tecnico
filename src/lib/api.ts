@@ -95,6 +95,7 @@ export type TechnicianSchedule = {
     technician_observations?: string | null;
     technician_attended_at?: string | null;
     technician_local_payment_received?: boolean;
+    technician_local_payment_status?: 'pending' | 'confirmed' | string | null;
     technician_local_payment_amount?: string | number | null;
     technician_local_payment_method?: string | null;
     technician_local_payment_notes?: string | null;

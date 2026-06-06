@@ -179,8 +179,9 @@ export default function ScheduleDetailScreen() {
 
       setSchedule(updated);
       setPaymentForm({ amount: '', method: 'pix', notes: '' });
+      setMessage('Pagamento enviado para conferencia do caixa.');
     } catch (error) {
-      setMessage(error instanceof ApiError ? error.message : 'Nao foi possivel registrar o pagamento.');
+      setMessage(error instanceof ApiError ? error.message : 'Nao foi possivel enviar o pagamento para conferencia.');
     } finally {
       setPaymentLoading(false);
     }
@@ -376,8 +377,12 @@ export default function ScheduleDetailScreen() {
               </View>
               {schedule.order.technician_local_payment_received ? (
                 <DataNote
-                  icon="verified"
-                  title="Pagamento registrado pelo tecnico"
+                  icon={schedule.order.technician_local_payment_status === 'confirmed' ? 'verified' : 'pending-actions'}
+                  title={
+                    schedule.order.technician_local_payment_status === 'confirmed'
+                      ? 'Pagamento conferido no caixa'
+                      : 'Pagamento aguardando conferencia'
+                  }
                   detail={`${formatMoney(Number(schedule.order.technician_local_payment_amount ?? 0))} - ${paymentMethodLabel(schedule.order.technician_local_payment_method)}`}
                 />
               ) : null}
@@ -416,7 +421,7 @@ export default function ScheduleDetailScreen() {
                 style={[styles.notesInput, { backgroundColor: colors.muted, borderColor: colors.border, color: colors.text }]}
               />
               <Button onPress={handleRecordPayment} loading={paymentLoading}>
-                Registrar pagamento
+                Enviar para conferencia
               </Button>
             </Card>
           ) : null}
