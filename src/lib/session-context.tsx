@@ -1,7 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { createContext, PropsWithChildren, useContext, useEffect, useMemo, useState } from 'react';
-import { Alert } from 'react-native';
 
 import { ApiCompany, ApiError, ApiUser, login as loginRequest, logout as logoutRequest } from '@/lib/api';
 import {
@@ -59,10 +58,6 @@ export function SessionProvider({ children }: PropsWithChildren) {
 
     registerForTechnicianPushNotifications(DEFAULT_BASE_URL, session.accessToken).catch((error) => {
       console.warn('Nao foi possivel registrar notificacoes push do tecnico.', error);
-
-      if (__DEV__) {
-        Alert.alert('Notificações', error instanceof Error ? error.message : 'Não foi possível registrar notificações push.');
-      }
     });
     const subscription = listenForTechnicianNotificationResponses();
 

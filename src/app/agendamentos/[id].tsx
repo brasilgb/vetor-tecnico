@@ -362,8 +362,13 @@ export default function ScheduleDetailScreen() {
       setSchedule(updated);
       await persistScheduleCache(updated, images);
       setPaymentForm({ amount: '', method: 'pix', notes: '' });
+      setMessage('Pagamento enviado para conferencia do caixa.');
     } catch (error) {
+<<<<<<< HEAD
       setMessage(error instanceof ApiError ? error.message : 'Não foi possível registrar o pagamento.');
+=======
+      setMessage(error instanceof ApiError ? error.message : 'Nao foi possivel enviar o pagamento para conferencia.');
+>>>>>>> b28bf68ccd1ee2a12e680d8ff531859bc1f402b9
     } finally {
       setPaymentLoading(false);
     }
@@ -642,8 +647,17 @@ export default function ScheduleDetailScreen() {
               </View>
               {schedule.order.technician_local_payment_received ? (
                 <DataNote
+<<<<<<< HEAD
                   icon="verified"
                   title="Pagamento registrado pelo técnico"
+=======
+                  icon={schedule.order.technician_local_payment_status === 'confirmed' ? 'verified' : 'pending-actions'}
+                  title={
+                    schedule.order.technician_local_payment_status === 'confirmed'
+                      ? 'Pagamento conferido no caixa'
+                      : 'Pagamento aguardando conferencia'
+                  }
+>>>>>>> b28bf68ccd1ee2a12e680d8ff531859bc1f402b9
                   detail={`${formatMoney(Number(schedule.order.technician_local_payment_amount ?? 0))} - ${paymentMethodLabel(schedule.order.technician_local_payment_method)}`}
                 />
               ) : null}
@@ -682,7 +696,7 @@ export default function ScheduleDetailScreen() {
                 style={[styles.notesInput, { backgroundColor: colors.muted, borderColor: colors.border, color: colors.text }]}
               />
               <Button onPress={handleRecordPayment} loading={paymentLoading}>
-                Registrar pagamento
+                Enviar para conferencia
               </Button>
             </Card>
           ) : null}
