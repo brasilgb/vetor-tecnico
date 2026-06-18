@@ -1,16 +1,16 @@
 {
   "expo": {
     "name": "VetorOS Técnico",
-    "slug": "vetor-tecnico",
+    "slug": "vetorostecnico",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "vetortecnico",
+    "scheme": "vetorostecnico",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.andersonbrodrigues.vetortecnico"
+      "bundleIdentifier": "com.andersonbrodrigues.vetorostecnico"
     },
     "android": {
       "permissions": [
@@ -21,11 +21,18 @@
         "foregroundImage": "./assets/images/icon.png",
         "backgroundColor": "#0b1220"
       },
+<<<<<<< HEAD
       "usesCleartextTraffic": true,
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "package": "com.andersonbrodrigues.vetortecnico",
       "googleServicesFile": "./google-services.json"
+=======
+      "edgeToEdgeEnabled": false,
+      "softwareKeyboardLayoutMode": "resize",
+      "predictiveBackGestureEnabled": false,
+      "package": "com.andersonbrodrigues.vetorostecnico"
+>>>>>>> 2b7653d (Push)
     },
     "web": {
       "output": "static",

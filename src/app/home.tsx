@@ -15,7 +15,6 @@ import {
   getTechnicianSchedules,
   TechnicianDashboard,
   TechnicianSchedule,
-  updateTechnicianScheduleStatus,
 } from '@/lib/api';
 import {
   notifyNewTechnicianSchedulesLocally,
@@ -64,10 +63,15 @@ export default function AtendimentoScreen() {
   const [agendaPeriod, setAgendaPeriod] = useState<AgendaPeriod>('pending');
   const [selectedSchedule, setSelectedSchedule] = useState<TechnicianSchedule | null>(null);
   const [loading, setLoading] = useState(false);
+<<<<<<< HEAD
   const [statusLoadingId, setStatusLoadingId] = useState<number | null>(null);
   const [pendingOfflineItems, setPendingOfflineItems] = useState<PendingOfflineItem[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const localNotificationHistoryReady = useRef(false);
+=======
+  const [message, setMessage] = useState<string | null>(null);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
+>>>>>>> 2b7653d (Push)
 
   const token = session?.accessToken;
   const tenantId = session?.user.tenant_id;
@@ -86,6 +90,7 @@ export default function AtendimentoScreen() {
       setSchedules(cachedData.schedules);
     }
 
+<<<<<<< HEAD
     try {
       const [dashboardResponse, schedulesResponse] = await Promise.all([
         getTechnicianDashboard(baseUrl, token),
@@ -152,13 +157,47 @@ export default function AtendimentoScreen() {
       clearInterval(interval);
     };
   }, [baseUrl, tenantId, token]);
+=======
+    const [dashboardResult, schedulesResult] = await Promise.allSettled([
+      getTechnicianDashboard(baseUrl, token),
+      getTechnicianSchedules(baseUrl, token, { period: agendaPeriod, per_page: 10 }),
+    ]);
+
+    if (dashboardResult.status === 'fulfilled') {
+      setDashboard(dashboardResult.value);
+    }
+
+    if (schedulesResult.status === 'fulfilled') {
+      setSchedules(sortSchedulesForPeriod(schedulesResult.value.data ?? [], agendaPeriod));
+    }
+
+    if (dashboardResult.status === 'fulfilled' || schedulesResult.status === 'fulfilled') {
+      setLastUpdatedAt(new Date());
+    }
+
+    if (dashboardResult.status === 'rejected' && schedulesResult.status === 'rejected') {
+      setMessage(getApiErrorMessage(dashboardResult.reason, 'Nao foi possivel carregar os atendimentos.'));
+    } else if (dashboardResult.status === 'rejected') {
+      setMessage(getApiErrorMessage(dashboardResult.reason, 'Agenda atualizada, mas nao foi possivel atualizar o resumo.'));
+    } else if (schedulesResult.status === 'rejected') {
+      setMessage(getApiErrorMessage(schedulesResult.reason, 'Resumo atualizado, mas nao foi possivel atualizar a agenda.'));
+    }
+
+    setLoading(false);
+  }, [agendaPeriod, baseUrl, token]);
+>>>>>>> 2b7653d (Push)
+
+  const refreshData = useCallback(() => {
+    void loadData();
+  }, [loadData]);
 
   useFocusEffect(
     useCallback(() => {
-      loadData();
-    }, [loadData]),
+      refreshData();
+    }, [refreshData]),
   );
 
+<<<<<<< HEAD
   async function updateScheduleStatus(schedule: TechnicianSchedule, status: 1 | 2) {
     if (!token) return;
 
@@ -193,6 +232,8 @@ export default function AtendimentoScreen() {
     [router],
   );
 
+=======
+>>>>>>> 2b7653d (Push)
   if (!session) {
     return (
       <AppShell>
@@ -203,6 +244,7 @@ export default function AtendimentoScreen() {
 
   const currentSchedule = dashboard?.current_schedule ?? schedules.find((schedule) => schedule.status === 2) ?? null;
   const nextSchedule = currentSchedule ?? dashboard?.next_schedule ?? (agendaPeriod === 'pending' ? schedules[0] : null);
+<<<<<<< HEAD
   const primaryScheduleTitle = currentSchedule ? 'Atendimento em andamento' : 'Próximo atendimento';
 
   return (
@@ -232,6 +274,22 @@ export default function AtendimentoScreen() {
             </Pressable>
           </View>
         </View>
+=======
+  const lastUpdatedLabel = lastUpdatedAt ? `Atualizado as ${formatClock(lastUpdatedAt)}` : 'Aguardando atualizacao';
+
+  return (
+    <AppShell>
+      <View style={[styles.workspaceHeader, { backgroundColor: colors.accent }]}>
+        <Pressable
+          disabled={loading}
+          hitSlop={10}
+          onPress={refreshData}
+          style={({ pressed }) => [styles.headerIconButton, { opacity: loading ? 0.58 : pressed ? 0.72 : 1 }]}
+          accessibilityRole="button"
+          accessibilityLabel="Atualizar agenda">
+          <MaterialIcons name={loading ? 'sync' : 'refresh'} size={22} color="#ffffff" />
+        </Pressable>
+>>>>>>> 2b7653d (Push)
         <View style={styles.companyRow}>
           <View style={styles.companyLogoWrap}>
             <Image
@@ -246,6 +304,7 @@ export default function AtendimentoScreen() {
               {session.company?.name || 'VetorOS'}
             </Text>
             <Text style={styles.operatorName}>{session.user.name}</Text>
+            <Text style={styles.lastUpdatedText}>{lastUpdatedLabel}</Text>
           </View>
         </View>
       </View>
@@ -297,15 +356,24 @@ export default function AtendimentoScreen() {
       ) : null}
 
       <Card>
+<<<<<<< HEAD
         <PanelHeader title={primaryScheduleTitle} detail={nextSchedule ? primaryScheduleDetail(nextSchedule, currentSchedule) : 'Sem agenda pendente'} />
+=======
+        <PanelHeader
+          title={currentSchedule ? 'Atendimento em andamento' : 'Proximo atendimento'}
+          detail={nextSchedule ? formatShortDateTime(nextSchedule.schedules) : 'Sem agenda pendente'}
+        />
+>>>>>>> 2b7653d (Push)
         {nextSchedule ? (
           <ScheduleCard
             schedule={nextSchedule}
             featured
-            loading={statusLoadingId === nextSchedule.id}
             onOpen={() => setSelectedSchedule(nextSchedule)}
+<<<<<<< HEAD
             onOpenSection={openScheduleSection}
             onUpdateStatus={updateScheduleStatus}
+=======
+>>>>>>> 2b7653d (Push)
           />
         ) : (
           <EmptyState icon="event-available" title="Nenhum atendimento pendente" detail="Quando uma agenda for enviada ao técnico, ela aparece aqui." />
@@ -337,10 +405,12 @@ export default function AtendimentoScreen() {
               <ScheduleCard
                 key={schedule.id}
                 schedule={schedule}
-                loading={statusLoadingId === schedule.id}
                 onOpen={() => setSelectedSchedule(schedule)}
+<<<<<<< HEAD
                 onOpenSection={openScheduleSection}
                 onUpdateStatus={updateScheduleStatus}
+=======
+>>>>>>> 2b7653d (Push)
               />
             ))
           ) : (
@@ -351,9 +421,7 @@ export default function AtendimentoScreen() {
 
       <ScheduleDetailsModal
         schedule={selectedSchedule}
-        loading={selectedSchedule ? statusLoadingId === selectedSchedule.id : false}
         onClose={() => setSelectedSchedule(null)}
-        onUpdateStatus={updateScheduleStatus}
         onOpenFull={(schedule) => {
           setSelectedSchedule(null);
           router.push(`/agendamentos/${schedule.id}` as never);
@@ -404,22 +472,23 @@ function SummaryCard({
 function ScheduleCard({
   schedule,
   featured,
-  loading,
   onOpen,
+<<<<<<< HEAD
   onOpenSection,
   onUpdateStatus,
+=======
+>>>>>>> 2b7653d (Push)
 }: {
   schedule: TechnicianSchedule;
   featured?: boolean;
-  loading?: boolean;
   onOpen: () => void;
+<<<<<<< HEAD
   onOpenSection: (schedule: TechnicianSchedule, section: ScheduleSection) => void;
   onUpdateStatus: (schedule: TechnicianSchedule, status: 1 | 2) => void;
+=======
+>>>>>>> 2b7653d (Push)
 }) {
   const colors = Colors[useColorScheme() ?? 'light'];
-  const canUpdateStatus = schedule.available_actions?.can_update_status !== false && schedule.status !== 3;
-  const isInService = schedule.status === 2;
-  const canRevert = isInService && !schedule.check_in?.at;
 
   return (
     <View style={[styles.scheduleCard, featured && styles.featuredSchedule, { borderColor: colors.border, backgroundColor: colors.card }]}>
@@ -445,20 +514,12 @@ function ScheduleCard({
             {schedule.service ?? 'Serviço não informado'}
           </Text>
           <Text style={[styles.summaryMeta, { color: colors.mutedText }]} numberOfLines={1}>
-            {schedule.order ? `OS ${schedule.order.order_number}` : 'Sem OS'} · {formatEquipment(schedule)}
+            {formatScheduleSummary(schedule)}
           </Text>
 
           {schedule.order ? <ScheduleBadges schedule={schedule} onOpenSection={onOpenSection} /> : null}
 
           <View style={styles.scheduleActions}>
-            {canUpdateStatus ? (
-              <ActionButton
-                icon={canRevert ? 'undo' : 'play-circle'}
-                label={loading ? 'Enviando' : canRevert ? 'Reverter' : isInService ? 'Em atendimento' : 'Iniciar'}
-                disabled={loading || (isInService && !canRevert)}
-                onPress={() => onUpdateStatus(schedule, canRevert ? 1 : 2)}
-              />
-            ) : null}
             <ActionButton icon="visibility" label="Detalhes" onPress={onOpen} primary />
           </View>
         </View>
@@ -505,15 +566,11 @@ function ScheduleBadges({
 
 function ScheduleDetailsModal({
   schedule,
-  loading,
   onClose,
-  onUpdateStatus,
   onOpenFull,
 }: {
   schedule: TechnicianSchedule | null;
-  loading: boolean;
   onClose: () => void;
-  onUpdateStatus: (schedule: TechnicianSchedule, status: 1 | 2) => void;
   onOpenFull: (schedule: TechnicianSchedule) => void;
 }) {
   const colors = Colors[useColorScheme() ?? 'light'];
@@ -523,9 +580,6 @@ function ScheduleDetailsModal({
 
   const address = formatAddress(schedule);
   const mapsUrl = schedule.customer?.quick_actions?.maps_url ?? getMapsUrl(address);
-  const canUpdateStatus = schedule.available_actions?.can_update_status !== false && schedule.status !== 3;
-  const isInService = schedule.status === 2;
-  const canRevert = isInService && !schedule.check_in?.at;
 
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
@@ -547,23 +601,22 @@ function ScheduleDetailsModal({
           </View>
 
           <View style={styles.modalInfo}>
+<<<<<<< HEAD
             <DataItem icon="today" label="Horário" value={formatShortDateTime(schedule.schedules)} />
             <DataItem icon="build" label="Serviço" value={schedule.service ?? 'Não informado'} />
             <DataItem icon="confirmation-number" label="OS" value={schedule.order ? String(schedule.order.order_number) : 'Sem OS'} />
             <DataItem icon="precision-manufacturing" label="Equipamento" value={formatEquipment(schedule)} />
             {address ? <DataItem icon="place" label="Endereço" value={address} wide /> : null}
+=======
+            <DataItem icon="today" label="Horario" value={formatShortDateTime(schedule.schedules)} />
+            <DataItem icon="build" label="Servico" value={schedule.service ?? 'Nao informado'} />
+            <DataItem icon="notes" label="Detalhes" value={schedule.details ?? 'Nao informado'} />
+            {address ? <DataItem icon="place" label="Endereco" value={address} wide /> : null}
+>>>>>>> 2b7653d (Push)
           </View>
 
           <View style={styles.scheduleActions}>
             {mapsUrl ? <ActionButton icon="route" label="Rota" onPress={() => Linking.openURL(mapsUrl)} /> : null}
-            {canUpdateStatus ? (
-              <ActionButton
-                icon={canRevert ? 'undo' : 'play-circle'}
-                label={loading ? 'Enviando' : canRevert ? 'Reverter' : isInService ? 'Em atendimento' : 'Iniciar'}
-                disabled={loading || (isInService && !canRevert)}
-                onPress={() => onUpdateStatus(schedule, canRevert ? 1 : 2)}
-              />
-            ) : null}
             <ActionButton icon="open-in-new" label="Atendimento" onPress={() => onOpenFull(schedule)} primary />
           </View>
         </Pressable>
@@ -736,9 +789,25 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     fontWeight: '600',
   },
+  lastUpdatedText: {
+    marginTop: 4,
+    color: 'rgba(255, 255, 255, 0.74)',
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '700',
+  },
   headerIconButton: {
+<<<<<<< HEAD
     width: 38,
     height: 38,
+=======
+    position: 'absolute',
+    top: 14,
+    right: 14,
+    zIndex: 2,
+    width: 42,
+    height: 42,
+>>>>>>> 2b7653d (Push)
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1150,11 +1219,29 @@ function pendingOfflineMoreText(total: number) {
   return `+${total} atendimentos aguardando sincronização`;
 }
 
-function formatEquipment(schedule: TechnicianSchedule) {
-  const equipment = schedule.order?.equipment?.equipment;
-  const model = schedule.order?.model;
+function formatScheduleSummary(schedule: TechnicianSchedule) {
+  const details = schedule.details?.trim();
 
+<<<<<<< HEAD
   return [equipment, model].filter(Boolean).join(' - ') || 'Não informado';
+=======
+  if (details) return details;
+
+  const materials = schedule.material_checklist_labels?.filter(Boolean).join(', ');
+
+  return materials || 'Atendimento externo';
+}
+
+function sortSchedulesForPeriod(schedules: TechnicianSchedule[], period: AgendaPeriod) {
+  if (period === 'completed') return schedules;
+
+  return [...schedules].sort((left, right) => {
+    if (left.status === 2 && right.status !== 2) return -1;
+    if (left.status !== 2 && right.status === 2) return 1;
+
+    return (parseDate(left.schedules)?.getTime() ?? 0) - (parseDate(right.schedules)?.getTime() ?? 0);
+  });
+>>>>>>> 2b7653d (Push)
 }
 
 function parseDate(value: string) {
@@ -1174,6 +1261,10 @@ function formatHour(value: string) {
   return parseDate(value)?.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) ?? '--:--';
 }
 
+function formatClock(value: Date) {
+  return value.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+}
+
 function formatShortDateTime(value: string) {
   const date = parseDate(value);
 
@@ -1187,6 +1278,7 @@ function formatShortDateTime(value: string) {
   }).format(date);
 }
 
+<<<<<<< HEAD
 function getHomeCacheKey(tenantId: number, period: AgendaPeriod) {
   return `@VetorTecnico:home:${tenantId}:${period}`;
 }
@@ -1238,4 +1330,8 @@ async function readCache<T>(key: string) {
     await AsyncStorage.removeItem(key);
     return null;
   }
+=======
+function getApiErrorMessage(error: unknown, fallback: string) {
+  return error instanceof ApiError ? error.message : fallback;
+>>>>>>> 2b7653d (Push)
 }

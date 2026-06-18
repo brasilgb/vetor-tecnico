@@ -91,14 +91,26 @@ export function SessionProvider({ children }: PropsWithChildren) {
         router.replace('/home');
       },
       async signOut() {
+<<<<<<< HEAD
         if (session) {
           await unregisterTechnicianPushNotifications(DEFAULT_BASE_URL, session.accessToken);
           await logoutRequest(DEFAULT_BASE_URL, session.accessToken).catch(() => undefined);
         }
         await clearTechnicianLocalNotificationHistory();
         await AsyncStorage.removeItem(STORAGE_SESSION);
+=======
+        const serverLogout = session
+          ? logoutRequest(DEFAULT_BASE_URL, session.accessToken).catch(() => undefined)
+          : Promise.resolve();
+
+>>>>>>> 2b7653d (Push)
         setSession(null);
         router.replace('/' as never);
+
+        await Promise.allSettled([
+          AsyncStorage.removeItem(STORAGE_SESSION),
+          serverLogout,
+        ]);
       },
     }),
     [isRestoring, session],

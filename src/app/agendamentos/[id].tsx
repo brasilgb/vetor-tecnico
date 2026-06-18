@@ -15,19 +15,25 @@ import {
   ApiError,
   checkInTechnicianSchedule,
   checkOutTechnicianSchedule,
-  deleteOrderImage,
-  getOrderImages,
+  deleteTechnicianScheduleImage,
+  getTechnicianScheduleImages,
   getTechnicianSchedule,
-  OrderImage,
   recordTechnicianSchedulePayment,
+  ScheduleMaterialChecklistItem,
+  ScheduleImage,
   TechnicianSchedule,
+<<<<<<< HEAD
   uploadOrderImage,
+=======
+>>>>>>> 2b7653d (Push)
   updateTechnicianScheduleChecklist,
   updateTechnicianScheduleReport,
+  uploadTechnicianScheduleImage,
 } from '@/lib/api';
 import { useSession } from '@/lib/session-context';
 
 type ActionKind = 'check-in' | 'check-out';
+<<<<<<< HEAD
 type PaymentMethod = 'pix' | 'cartao' | 'dinheiro' | 'transferencia';
 type DetailSection = 'report' | 'images';
 
@@ -55,6 +61,8 @@ const paymentMethods: { label: string; value: PaymentMethod; icon: keyof typeof 
   { label: 'Dinheiro', value: 'dinheiro', icon: 'payments' },
   { label: 'Transferência', value: 'transferencia', icon: 'account-balance' },
 ];
+=======
+>>>>>>> 2b7653d (Push)
 
 export default function ScheduleDetailScreen() {
   const colors = Colors[useColorScheme() ?? 'light'];
@@ -67,17 +75,26 @@ export default function ScheduleDetailScreen() {
   const [schedule, setSchedule] = useState<TechnicianSchedule | null>(null);
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<ActionKind | null>(null);
+<<<<<<< HEAD
   const [images, setImages] = useState<OrderImage[]>([]);
   const [selectedImage, setSelectedImage] = useState<OrderImage | null>(null);
   const [imageLoading, setImageLoading] = useState(false);
   const [reportLoading, setReportLoading] = useState(false);
   const [checklistLoading, setChecklistLoading] = useState(false);
   const [paymentLoading, setPaymentLoading] = useState(false);
+=======
+  const [checklistLoading, setChecklistLoading] = useState(false);
+  const [equipmentChecklistLoading, setEquipmentChecklistLoading] = useState(false);
+  const [images, setImages] = useState<ScheduleImage[]>([]);
+  const [imageLoading, setImageLoading] = useState(false);
+  const [reportLoading, setReportLoading] = useState(false);
+>>>>>>> 2b7653d (Push)
   const [reportForm, setReportForm] = useState({
     diagnosis: '',
     solution: '',
     observations: '',
   });
+<<<<<<< HEAD
   const [paymentForm, setPaymentForm] = useState<{
     amount: string;
     method: PaymentMethod;
@@ -89,6 +106,10 @@ export default function ScheduleDetailScreen() {
   });
   const [checklistFormItems, setChecklistFormItems] = useState<string[]>([]);
   const [pendingActions, setPendingActions] = useState<PendingScheduleActions | null>(null);
+=======
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentLoading, setPaymentLoading] = useState(false);
+>>>>>>> 2b7653d (Push)
   const [observations, setObservations] = useState('');
   const [message, setMessage] = useState<string | null>(null);
 
@@ -173,6 +194,7 @@ export default function ScheduleDetailScreen() {
 
     try {
       const scheduleResponse = await getTechnicianSchedule(baseUrl, token, scheduleId);
+<<<<<<< HEAD
       let nextImages: OrderImage[] = [];
 
       if (scheduleResponse.order?.order_number) {
@@ -183,6 +205,16 @@ export default function ScheduleDetailScreen() {
 
       applyScheduleState(syncedSchedule, nextImages);
       await persistScheduleCache(syncedSchedule, nextImages);
+=======
+      setSchedule(scheduleResponse);
+      setReportForm({
+        diagnosis: scheduleResponse.order?.technician_diagnosis ?? '',
+        solution: scheduleResponse.order?.technician_solution ?? '',
+        observations: scheduleResponse.order?.technician_observations ?? '',
+      });
+      setPaymentAmount(formatPaymentInput(scheduleResponse.local_payment?.amount));
+      setImages(await getTechnicianScheduleImages(baseUrl, token, scheduleId));
+>>>>>>> 2b7653d (Push)
     } catch (error) {
       setMessage(error instanceof ApiError ? error.message : cachedData ? 'Sem conexão. Exibindo atendimento salvo.' : 'Não foi possível carregar o atendimento.');
     } finally {
@@ -222,11 +254,17 @@ export default function ScheduleDetailScreen() {
     [checklistFormItems, savedChecklistItems],
   );
   const canCheckIn = Boolean(schedule && schedule.status !== 3 && !schedule.check_in?.at);
+<<<<<<< HEAD
   const canAttemptCheckOut = Boolean(schedule && schedule.status !== 3 && schedule.check_in?.at && !schedule.check_out?.at);
   const canCheckOut = canAttemptCheckOut && checkoutRequirements.length === 0;
   const imageLimit = getImageLimit(schedule, images.length);
   const canUploadImage = schedule?.available_actions?.can_upload_images !== false && images.length < imageLimit;
   const paymentSummary = getPaymentSummary(schedule);
+=======
+  const canCheckOut = Boolean(schedule && schedule.status !== 3 && schedule.check_in?.at && !schedule.check_out?.at);
+  const materialChecklist = normalizeMaterialChecklist(schedule?.material_checklist);
+  const equipmentChecklist = normalizeEquipmentChecklist(schedule);
+>>>>>>> 2b7653d (Push)
 
   async function handleAttendanceAction(kind: ActionKind) {
     if (!token || !schedule) return;
@@ -252,6 +290,25 @@ export default function ScheduleDetailScreen() {
       setMessage(error instanceof ApiError ? error.message : 'Não foi possível registrar a ação.');
     } finally {
       setActionLoading(null);
+    }
+  }
+
+  async function handleToggleMaterial(itemIndex: number) {
+    if (!token || !schedule) return;
+
+    const nextItems = materialChecklist.map((item, index) => (index === itemIndex ? { ...item, used: !item.used } : item));
+    setChecklistLoading(true);
+    setMessage(null);
+
+    try {
+      const updated = await updateTechnicianScheduleChecklist(baseUrl, token, schedule.id, {
+        material_checklist: nextItems,
+      });
+      setSchedule(updated);
+    } catch (error) {
+      setMessage(error instanceof ApiError ? error.message : 'Nao foi possivel atualizar os materiais.');
+    } finally {
+      setChecklistLoading(false);
     }
   }
 
@@ -295,6 +352,7 @@ export default function ScheduleDetailScreen() {
     }
   }
 
+<<<<<<< HEAD
   function handleToggleChecklistItem(item: string) {
     setChecklistFormItems((current) => {
       if (current.includes(item)) {
@@ -340,26 +398,28 @@ export default function ScheduleDetailScreen() {
   }
 
   async function handleRecordPayment() {
+=======
+  async function handleToggleEquipmentChecklist(item: string) {
+>>>>>>> 2b7653d (Push)
     if (!token || !schedule) return;
 
-    const amount = parseMoneyInput(paymentForm.amount);
+    const completed = new Set(schedule.order?.technician_checklist_items ?? []);
 
-    if (!amount || amount <= 0) {
-      setMessage('Informe um valor de pagamento valido.');
-      return;
+    if (completed.has(item)) {
+      completed.delete(item);
+    } else {
+      completed.add(item);
     }
 
-    setPaymentLoading(true);
+    setEquipmentChecklistLoading(true);
     setMessage(null);
 
     try {
-      const updated = await recordTechnicianSchedulePayment(baseUrl, token, schedule.id, {
-        amount,
-        payment_method: paymentForm.method,
-        notes: normalizeText(paymentForm.notes),
+      const updated = await updateTechnicianScheduleChecklist(baseUrl, token, schedule.id, {
+        items: Array.from(completed),
       });
-
       setSchedule(updated);
+<<<<<<< HEAD
       await persistScheduleCache(updated, images);
       setPaymentForm({ amount: '', method: 'pix', notes: '' });
       setMessage('Pagamento enviado para conferencia do caixa.');
@@ -369,13 +429,17 @@ export default function ScheduleDetailScreen() {
 =======
       setMessage(error instanceof ApiError ? error.message : 'Nao foi possivel enviar o pagamento para conferencia.');
 >>>>>>> b28bf68ccd1ee2a12e680d8ff531859bc1f402b9
+=======
+    } catch (error) {
+      setMessage(error instanceof ApiError ? error.message : 'Nao foi possivel atualizar o checklist tecnico.');
+>>>>>>> 2b7653d (Push)
     } finally {
-      setPaymentLoading(false);
+      setEquipmentChecklistLoading(false);
     }
   }
 
   async function handlePickImage(source: 'camera' | 'library') {
-    if (!token || !schedule?.order?.order_number) return;
+    if (!token || !schedule) return;
 
     setImageLoading(true);
     setMessage(null);
@@ -385,10 +449,15 @@ export default function ScheduleDetailScreen() {
 
       if (result.canceled || !result.assets[0]?.base64) return;
 
+<<<<<<< HEAD
       await uploadOrderImage(baseUrl, token, schedule.order.order_number, result.assets[0].base64);
       const nextImages = await getOrderImages(baseUrl, token, schedule.order.order_number);
       setImages(nextImages);
       await persistScheduleCache(schedule, nextImages);
+=======
+      await uploadTechnicianScheduleImage(baseUrl, token, schedule.id, result.assets[0].base64);
+      setImages(await getTechnicianScheduleImages(baseUrl, token, schedule.id));
+>>>>>>> 2b7653d (Push)
     } catch (error) {
       setMessage(error instanceof ApiError ? error.message : 'Não foi possível anexar a imagem.');
     } finally {
@@ -396,18 +465,23 @@ export default function ScheduleDetailScreen() {
     }
   }
 
-  async function handleDeleteImage(image: OrderImage) {
-    if (!token || !schedule?.order?.order_number) return;
+  async function handleDeleteImage(image: ScheduleImage) {
+    if (!token || !schedule) return;
 
     setImageLoading(true);
     setMessage(null);
 
     try {
+<<<<<<< HEAD
       await deleteOrderImage(baseUrl, token, image.id);
       const nextImages = images.filter((item) => item.id !== image.id);
       setImages(nextImages);
       setSelectedImage((current) => (current?.id === image.id ? null : current));
       await persistScheduleCache(schedule, nextImages);
+=======
+      await deleteTechnicianScheduleImage(baseUrl, token, schedule.id, image.id);
+      setImages((current) => current.filter((item) => item.id !== image.id));
+>>>>>>> 2b7653d (Push)
     } catch (error) {
       setMessage(error instanceof ApiError ? error.message : 'Não foi possível remover a imagem.');
     } finally {
@@ -415,6 +489,7 @@ export default function ScheduleDetailScreen() {
     }
   }
 
+<<<<<<< HEAD
   async function handleSyncPendingActions() {
     if (!token || !schedule) return;
 
@@ -447,6 +522,35 @@ export default function ScheduleDetailScreen() {
     ]);
   }
 
+=======
+  async function handleRecordPayment() {
+    if (!token || !schedule) return;
+
+    const amount = parsePaymentAmount(paymentAmount);
+
+    if (!amount || amount <= 0) {
+      setMessage('Informe um valor maior que zero para marcar como pago.');
+      return;
+    }
+
+    setPaymentLoading(true);
+    setMessage(null);
+
+    try {
+      const updated = await recordTechnicianSchedulePayment(baseUrl, token, schedule.id, {
+        paid: true,
+        amount,
+      });
+      setSchedule(updated);
+      setPaymentAmount(formatPaymentInput(updated.local_payment?.amount));
+    } catch (error) {
+      setMessage(error instanceof ApiError ? error.message : 'Nao foi possivel registrar o pagamento.');
+    } finally {
+      setPaymentLoading(false);
+    }
+  }
+
+>>>>>>> 2b7653d (Push)
   if (!session) {
     return (
       <AppShell>
@@ -500,10 +604,18 @@ export default function ScheduleDetailScreen() {
             </View>
 
             <View style={styles.infoGrid}>
+<<<<<<< HEAD
               <InfoRow icon="build" label="Serviço" value={schedule.service ?? schedule.details ?? 'Serviço não informado'} />
               <InfoRow icon="place" label="Endereço" value={address ?? 'Endereço não informado'} />
               <InfoRow icon="phone" label="Telefone" value={schedule.customer?.phone ?? 'Não informado'} />
               <InfoRow icon="chat" label="WhatsApp" value={schedule.customer?.whatsapp ?? 'Não informado'} />
+=======
+              <InfoRow icon="build" label="Servico" value={schedule.service ?? schedule.details ?? 'Servico nao informado'} />
+              <InfoRow icon="notes" label="Detalhes" value={schedule.details ?? 'Nao informado'} />
+              <InfoRow icon="place" label="Endereco" value={address ?? 'Endereco nao informado'} />
+              <InfoRow icon="phone" label="Telefone" value={schedule.customer?.phone ?? 'Nao informado'} />
+              <InfoRow icon="chat" label="WhatsApp" value={schedule.customer?.whatsapp ?? 'Nao informado'} />
+>>>>>>> 2b7653d (Push)
             </View>
 
             <View style={styles.quickActions}>
@@ -617,6 +729,7 @@ export default function ScheduleDetailScreen() {
 
           {schedule.order && checklistItems.length > 0 ? (
             <Card>
+<<<<<<< HEAD
               <PanelHeader title="Checklist técnico" detail={`${savedChecklistItems.length}/${checklistItems.length} itens salvos`} />
               <View style={styles.checklistList}>
                 {checklistItems.map((item) => (
@@ -633,12 +746,45 @@ export default function ScheduleDetailScreen() {
               ) : null}
               <Button onPress={handleSaveChecklist} loading={checklistLoading} disabled={!isChecklistDirty}>
                 Salvar checklist
+=======
+              <PanelHeader
+                title="Relatorio tecnico"
+                detail={schedule.order.technician_attended_at ? `Atualizado em ${formatDateTime(schedule.order.technician_attended_at)}` : 'Diagnostico e solucao do atendimento'}
+              />
+              <TextInput
+                multiline
+                value={reportForm.diagnosis}
+                onChangeText={(value) => setReportForm((current) => ({ ...current, diagnosis: value }))}
+                placeholder="Diagnostico encontrado"
+                placeholderTextColor={colors.mutedText}
+                style={[styles.notesInput, { backgroundColor: colors.muted, borderColor: colors.border, color: colors.text }]}
+              />
+              <TextInput
+                multiline
+                value={reportForm.solution}
+                onChangeText={(value) => setReportForm((current) => ({ ...current, solution: value }))}
+                placeholder="Solucao aplicada"
+                placeholderTextColor={colors.mutedText}
+                style={[styles.notesInput, { backgroundColor: colors.muted, borderColor: colors.border, color: colors.text }]}
+              />
+              <TextInput
+                multiline
+                value={reportForm.observations}
+                onChangeText={(value) => setReportForm((current) => ({ ...current, observations: value }))}
+                placeholder="Observacoes finais"
+                placeholderTextColor={colors.mutedText}
+                style={[styles.notesInput, { backgroundColor: colors.muted, borderColor: colors.border, color: colors.text }]}
+              />
+              <Button onPress={handleSaveReport} loading={reportLoading}>
+                Salvar relatorio
+>>>>>>> 2b7653d (Push)
               </Button>
             </Card>
           ) : null}
 
           {schedule.order ? (
             <Card>
+<<<<<<< HEAD
               <PanelHeader title="Pagamento local" detail={`Saldo: ${formatMoney(paymentSummary.remaining)} de ${formatMoney(paymentSummary.total)}`} />
               <View style={styles.paymentSummaryGrid}>
                 <PaymentMetric label="Total da OS" value={formatMoney(paymentSummary.total)} />
@@ -740,6 +886,126 @@ export default function ScheduleDetailScreen() {
             onClose={() => setSelectedImage(null)}
             onDelete={(image) => handleConfirmDeleteImage(image)}
           />
+=======
+              <PanelHeader title="Checklist tecnico" detail={equipmentChecklistDetail(equipmentChecklist)} />
+              {equipmentChecklist.length > 0 ? (
+                <View style={styles.materialList}>
+                  {equipmentChecklist.map((item) => (
+                    <Pressable
+                      key={item.label}
+                      disabled={equipmentChecklistLoading || schedule.status === 3}
+                      onPress={() => handleToggleEquipmentChecklist(item.label)}
+                      style={({ pressed }) => [
+                        styles.materialItem,
+                        {
+                          backgroundColor: colors.muted,
+                          borderColor: item.completed ? colors.success : colors.border,
+                          opacity: equipmentChecklistLoading ? 0.58 : pressed ? 0.72 : 1,
+                        },
+                      ]}>
+                      <MaterialIcons name={item.completed ? 'check-circle' : 'radio-button-unchecked'} size={22} color={item.completed ? colors.success : colors.icon} />
+                      <View style={styles.materialText}>
+                        <Text style={[styles.infoValue, { color: colors.text }]}>{item.label}</Text>
+                      </View>
+                    </Pressable>
+                  ))}
+                </View>
+              ) : (
+                <TextMuted>Sem checklist cadastrado para este equipamento.</TextMuted>
+              )}
+            </Card>
+          ) : null}
+
+          <Card>
+            <PanelHeader title="Materiais do atendimento" detail={materialChecklistDetail(materialChecklist)} />
+            {materialChecklist.length > 0 ? (
+              <View style={styles.materialList}>
+                {materialChecklist.map((item, index) => (
+                  <Pressable
+                    key={`${item.part_id ?? 'manual'}-${item.name}-${index}`}
+                    disabled={checklistLoading || schedule.status === 3}
+                    onPress={() => handleToggleMaterial(index)}
+                    style={({ pressed }) => [
+                      styles.materialItem,
+                      {
+                        backgroundColor: colors.muted,
+                        borderColor: item.used ? colors.success : colors.border,
+                        opacity: checklistLoading ? 0.58 : pressed ? 0.72 : 1,
+                      },
+                    ]}>
+                    <MaterialIcons name={item.used ? 'check-circle' : 'radio-button-unchecked'} size={22} color={item.used ? colors.success : colors.icon} />
+                    <View style={styles.materialText}>
+                      <Text style={[styles.infoValue, { color: colors.text }]}>{item.name}</Text>
+                      {item.quantity > 1 ? <Text style={[styles.infoLabel, { color: colors.mutedText }]}>Quantidade: {item.quantity}</Text> : null}
+                    </View>
+                  </Pressable>
+                ))}
+              </View>
+            ) : (
+              <TextMuted>Nenhum material informado para este atendimento.</TextMuted>
+            )}
+          </Card>
+
+          <Card>
+            <PanelHeader
+              title="Pagamento no local"
+              detail={
+                schedule.local_payment?.received
+                  ? `Pago: ${formatCurrency(schedule.local_payment.amount)}`
+                  : 'Informe o valor recebido no atendimento'
+              }
+            />
+            <View style={styles.paymentRow}>
+              <View style={[styles.paymentIcon, { backgroundColor: schedule.local_payment?.received ? colors.success : colors.tint }]}>
+                {schedule.local_payment?.received ? (
+                  <MaterialIcons name="paid" size={22} color="#ffffff" />
+                ) : (
+                  <Text style={styles.paymentCurrencyIcon}>R$</Text>
+                )}
+              </View>
+              <TextInput
+                value={paymentAmount}
+                onChangeText={(value) => setPaymentAmount(formatPaymentInputText(value))}
+                keyboardType="decimal-pad"
+                placeholder="0,00"
+                placeholderTextColor={colors.mutedText}
+                style={[styles.paymentInput, { backgroundColor: colors.muted, borderColor: colors.border, color: colors.text }]}
+              />
+            </View>
+            {schedule.local_payment?.received ? (
+              <TextMuted>Pagamento marcado no agendamento. Este valor nao foi lancado no caixa.</TextMuted>
+            ) : null}
+            <Button onPress={handleRecordPayment} loading={paymentLoading}>
+              {schedule.local_payment?.received ? 'Atualizar valor pago' : 'Marcar pago no local'}
+            </Button>
+          </Card>
+
+          <Card>
+            <PanelHeader title="Fotos do atendimento" detail={`${images.length}/4 fotos anexadas`} />
+            <View style={styles.quickActions}>
+              <IconAction icon="photo-camera" label={imageLoading ? 'Enviando' : 'Camera'} onPress={() => handlePickImage('camera')} disabled={imageLoading || images.length >= 4} />
+              <IconAction icon="photo-library" label="Galeria" onPress={() => handlePickImage('library')} disabled={imageLoading || images.length >= 4} />
+            </View>
+            {images.length > 0 ? (
+              <View style={styles.imageGrid}>
+                {images.map((image) => (
+                  <View key={image.id} style={[styles.imageTile, { borderColor: colors.border, backgroundColor: colors.muted }]}>
+                    <Image source={{ uri: getScheduleImageUrl(baseUrl, image.schedule_id, image.filename) }} style={styles.scheduleImage} resizeMode="cover" />
+                    <Pressable
+                      disabled={imageLoading}
+                      onPress={() => handleDeleteImage(image)}
+                      style={({ pressed }) => [styles.deleteImageButton, pressed && styles.pressed]}>
+                      <MaterialIcons name="delete" size={18} color="#ffffff" />
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <TextMuted>Nenhuma foto anexada.</TextMuted>
+            )}
+          </Card>
+
+>>>>>>> 2b7653d (Push)
         </>
       ) : (
         <Card>
@@ -813,6 +1079,7 @@ function InfoRow({
   );
 }
 
+<<<<<<< HEAD
 function PaymentMetric({ label, value }: { label: string; value: string }) {
   const colors = Colors[useColorScheme() ?? 'light'];
 
@@ -879,6 +1146,8 @@ function ChecklistItem({ label, checked, onPress }: { label: string; checked: bo
   );
 }
 
+=======
+>>>>>>> 2b7653d (Push)
 function IconAction({
   icon,
   label,
@@ -1212,8 +1481,12 @@ async function launchCamera() {
   const permission = await ImagePicker.requestCameraPermissionsAsync();
 
   if (permission.status !== ImagePicker.PermissionStatus.GRANTED) {
+<<<<<<< HEAD
     showPermissionSettingsAlert('Câmera', 'Permita o acesso à câmera para anexar imagens do atendimento.');
     throw new ApiError('Permita o acesso à câmera para anexar imagens.', 422);
+=======
+    throw new ApiError('Permita o acesso a camera para anexar fotos.', 422);
+>>>>>>> 2b7653d (Push)
   }
 
   return ImagePicker.launchCameraAsync({
@@ -1227,8 +1500,12 @@ async function launchLibrary() {
   const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
   if (permission.status !== ImagePicker.PermissionStatus.GRANTED) {
+<<<<<<< HEAD
     showPermissionSettingsAlert('Galeria', 'Permita o acesso à galeria para anexar imagens do atendimento.');
     throw new ApiError('Permita o acesso à galeria para anexar imagens.', 422);
+=======
+    throw new ApiError('Permita o acesso a galeria para anexar fotos.', 422);
+>>>>>>> 2b7653d (Push)
   }
 
   return ImagePicker.launchImageLibraryAsync({
@@ -1239,10 +1516,10 @@ async function launchLibrary() {
   });
 }
 
-function getOrderImageUrl(baseUrl: string, orderNumber: number | null | undefined, filename: string) {
+function getScheduleImageUrl(baseUrl: string, scheduleId: number, filename: string) {
   const serverUrl = baseUrl.replace(/\/api\/?$/, '');
 
-  return `${serverUrl}/storage/orders/${orderNumber ?? ''}/${filename}`;
+  return `${serverUrl}/storage/schedules/${scheduleId}/${filename}`;
 }
 
 function formatDateTime(value: string) {
@@ -1278,35 +1555,95 @@ function formatCoordinates(latitude: string | number | null | undefined, longitu
   return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
 }
 
-function getPaymentSummary(schedule: TechnicianSchedule | null) {
-  const total = Number(schedule?.order?.service_cost ?? 0);
-  const paid = (schedule?.order?.order_payments ?? []).reduce((sum, payment) => sum + Number(payment.amount ?? 0), 0);
+function normalizeMaterialChecklist(items: TechnicianSchedule['material_checklist']): ScheduleMaterialChecklistItem[] {
+  if (!Array.isArray(items)) return [];
 
-  return {
-    total,
-    paid,
-    remaining: Math.max(0, total - paid),
-  };
+  return items.flatMap((item) => {
+    const name = String(item?.name ?? '').trim();
+    const quantity = Math.max(1, Number(item?.quantity ?? 1) || 1);
+
+    return name ? [{ name, quantity, part_id: item?.part_id ?? null, used: Boolean(item?.used) }] : [];
+  });
 }
 
-function parseMoneyInput(value: string) {
-  const normalized = value.includes(',')
-    ? value.replace(/\./g, '').replace(',', '.').replace(/[^\d.]/g, '')
-    : value.replace(/[^\d.]/g, '');
-  const parsed = Number(normalized);
+function materialChecklistDetail(items: ScheduleMaterialChecklistItem[]) {
+  if (items.length === 0) return 'Pecas e materiais separados para o atendimento';
 
-  return Number.isFinite(parsed) ? parsed : 0;
+  const used = items.filter((item) => item.used).length;
+
+  return `${used}/${items.length} materiais usados`;
 }
 
-function formatMoney(value: number) {
-  return new Intl.NumberFormat('pt-BR', {
+function normalizeEquipmentChecklist(schedule: TechnicianSchedule | null) {
+  const availableItems = schedule?.order?.equipment?.checklist_items;
+  const completedItems = new Set(schedule?.order?.technician_checklist_items ?? []);
+
+  if (!Array.isArray(availableItems)) return [];
+
+  return availableItems
+    .map((item) => String(item ?? '').trim())
+    .filter(Boolean)
+    .map((label) => ({
+      label,
+      completed: completedItems.has(label),
+    }));
+}
+
+function equipmentChecklistDetail(items: { label: string; completed: boolean }[]) {
+  if (items.length === 0) return 'Checklist cadastrado no equipamento da OS';
+
+  const completed = items.filter((item) => item.completed).length;
+
+  return `${completed}/${items.length} itens concluidos`;
+}
+
+function parsePaymentAmount(value: string) {
+  const digits = value.replace(/\D/g, '');
+
+  if (!digits) return 0;
+
+  const amount = Number(digits) / 100;
+
+  return Number.isFinite(amount) ? amount : 0;
+}
+
+function formatPaymentInput(value: string | number | null | undefined) {
+  if (value === null || value === undefined || value === '') return '';
+
+  const amount = Number(value);
+
+  if (!Number.isFinite(amount) || amount <= 0) return '';
+
+  return formatDecimalCurrency(amount);
+}
+
+function formatPaymentInputText(value: string) {
+  const digits = value.replace(/\D/g, '');
+
+  if (!digits) return '';
+
+  return formatDecimalCurrency(Number(digits) / 100);
+}
+
+function formatCurrency(value: string | number | null | undefined) {
+  const amount = Number(value || 0);
+
+  return amount.toLocaleString('pt-BR', {
     style: 'currency',
     currency: 'BRL',
-  }).format(value);
+  });
 }
 
+<<<<<<< HEAD
 function paymentMethodLabel(value: string | null | undefined) {
   return paymentMethods.find((method) => method.value === value)?.label ?? 'Não informado';
+=======
+function formatDecimalCurrency(value: number) {
+  return value.toLocaleString('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+>>>>>>> 2b7653d (Push)
 }
 
 function normalizeText(value: string) {
@@ -1521,6 +1858,7 @@ const styles = StyleSheet.create({
   actions: {
     gap: 10,
   },
+<<<<<<< HEAD
   requirementsList: {
     gap: 8,
   },
@@ -1572,22 +1910,12 @@ const styles = StyleSheet.create({
   paymentSummaryGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+=======
+  materialList: {
+>>>>>>> 2b7653d (Push)
     gap: 10,
   },
-  paymentMetric: {
-    flexGrow: 1,
-    flexBasis: 150,
-    borderWidth: 1,
-    borderRadius: 8,
-    padding: 12,
-    gap: 4,
-  },
-  paymentMetricValue: {
-    fontSize: 17,
-    lineHeight: 23,
-    fontWeight: '900',
-  },
-  dataNote: {
+  materialItem: {
     minHeight: 58,
     borderWidth: 1,
     borderRadius: 8,
@@ -1596,32 +1924,37 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
   },
-  paymentMethods: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
+  materialText: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
   },
-  paymentMethodButton: {
-    minHeight: 40,
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 10,
+  paymentRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 10,
   },
-  paymentMethodText: {
-    fontSize: 12,
-    lineHeight: 16,
+  paymentIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  paymentCurrencyIcon: {
+    color: '#ffffff',
+    fontSize: 16,
+    lineHeight: 22,
     fontWeight: '900',
   },
   paymentInput: {
-    minHeight: 54,
+    flex: 1,
+    minHeight: 48,
     borderWidth: 1,
     borderRadius: 8,
     paddingHorizontal: 12,
-    fontSize: 17,
-    lineHeight: 23,
+    fontSize: 16,
+    lineHeight: 22,
     fontWeight: '800',
   },
   imageGrid: {
@@ -1636,11 +1969,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     overflow: 'hidden',
   },
+<<<<<<< HEAD
   imagePreviewButton: {
     width: '100%',
     height: '100%',
   },
   orderImage: {
+=======
+  scheduleImage: {
+>>>>>>> 2b7653d (Push)
     width: '100%',
     height: '100%',
   },

@@ -44,6 +44,7 @@ export default function LoginScreen() {
   }
 
   return (
+<<<<<<< HEAD
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.keyboardView}>
       <AppShell centered>
         <View style={styles.loginLayout}>
@@ -55,6 +56,18 @@ export default function LoginScreen() {
             <Text style={styles.brandTitle}>VetorOS Técnico</Text>
             <Text style={styles.brandText}>Agenda, dados da OS e registros de execução reunidos em uma área de trabalho objetiva.</Text>
           </View>
+=======
+    <AppShell centered avoidKeyboard>
+      <View style={styles.loginLayout}>
+        <View style={styles.brandPanel}>
+          <View style={styles.logoCard}>
+            <Image source={require('@/assets/images/logo.png')} style={styles.logo} resizeMode="contain" />
+          </View>
+          <Text style={styles.brandKicker}>Operacao tecnica</Text>
+          <Text style={styles.brandTitle}>VetorOS Tecnico</Text>
+          <Text style={styles.brandText}>Agenda, dados do atendimento e registros de execucao reunidos em uma area de trabalho objetiva.</Text>
+        </View>
+>>>>>>> 2b7653d (Push)
 
           <Card style={styles.loginCard}>
             <View>

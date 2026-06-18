@@ -1,6 +1,6 @@
 {
-  "name": "vetor-tecnico",
-  "main": "expo-router/entry",
+  "name": "vetortecnico",
+  "main": "./src/entry.js",
   "version": "1.0.0",
   "scripts": {
     "start": "expo start",

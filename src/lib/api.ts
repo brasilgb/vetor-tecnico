@@ -27,6 +27,8 @@ export type TechnicianSchedule = {
   schedules: string;
   service?: string | null;
   details?: string | null;
+  material_checklist?: ScheduleMaterialChecklistItem[] | null;
+  material_checklist_labels?: string[] | null;
   status: number;
   status_label?: string | null;
   observations?: string | null;
@@ -40,9 +42,13 @@ export type TechnicianSchedule = {
     can_finish: boolean;
     can_cancel: boolean;
     can_edit_service: boolean;
-    can_record_local_payment: boolean;
-    can_upload_images: boolean;
-    remaining_images: number;
+    can_record_local_payment?: boolean;
+  };
+  local_payment?: {
+    received?: boolean;
+    amount?: string | number | null;
+    received_at?: string | null;
+    user_id?: number | null;
   };
   check_in?: {
     at?: string | null;
@@ -81,13 +87,19 @@ export type TechnicianSchedule = {
   order?: {
     id: number;
     order_number: number;
+    order_type?: string | null;
     tracking_token?: string | null;
     model?: string | null;
     defect?: string | null;
+    service_type?: string | null;
+    service_details?: string | null;
+    materials_used?: string | null;
     state_conservation?: string | null;
     accessories?: string | null;
     budget_description?: string | null;
     budget_value?: string | number | null;
+    service_status?: number | null;
+    service_status_label?: string | null;
     observations?: string | null;
     services_performed?: string | null;
     technician_diagnosis?: string | null;
@@ -96,15 +108,10 @@ export type TechnicianSchedule = {
     technician_checklist_items?: string[];
     technician_checklist_completed_at?: string | null;
     technician_attended_at?: string | null;
-    technician_local_payment_received?: boolean;
-    technician_local_payment_status?: 'pending' | 'confirmed' | string | null;
-    technician_local_payment_amount?: string | number | null;
-    technician_local_payment_method?: string | null;
-    technician_local_payment_notes?: string | null;
-    technician_local_payment_received_at?: string | null;
     service_cost?: string | number | null;
     delivery_forecast?: string | null;
     delivery_date?: string | null;
+<<<<<<< HEAD
     service_status?: number | null;
     service_status_label?: string | null;
     equipment?: {
@@ -125,6 +132,8 @@ export type TechnicianSchedule = {
       has_check_out: boolean;
       has_technician_notes: boolean;
     };
+=======
+>>>>>>> 2b7653d (Push)
     order_payments?: {
       id: number;
       amount: string | number;
@@ -132,7 +141,30 @@ export type TechnicianSchedule = {
       paid_at?: string | null;
       notes?: string | null;
     }[];
+    equipment?: {
+      id: number;
+      equipment_number?: number;
+      equipment?: string | null;
+      checklist_items?: string[];
+    } | null;
   } | null;
+};
+
+export type ScheduleMaterialChecklistItem = {
+  name: string;
+  quantity: number;
+  part_id?: number | null;
+  used?: boolean;
+};
+
+export type ScheduleImage = {
+  id: number;
+  tenant_id?: number | null;
+  schedule_id: number;
+  user_id?: number | null;
+  filename: string;
+  created_at?: string | null;
+  updated_at?: string | null;
 };
 
 export type TechnicianDashboard = {
@@ -140,20 +172,14 @@ export type TechnicianDashboard = {
     today: number;
     pending: number;
     in_progress?: number;
+<<<<<<< HEAD
     overdue?: number;
+=======
+>>>>>>> 2b7653d (Push)
     completed: number;
   };
   current_schedule?: TechnicianSchedule | null;
   next_schedule?: TechnicianSchedule | null;
-};
-
-export type OrderImage = {
-  id: number;
-  tenant_id?: number | null;
-  order_id: number;
-  filename: string;
-  created_at?: string | null;
-  updated_at?: string | null;
 };
 
 export type PaginatedResult<T> = {
@@ -298,26 +324,6 @@ export async function getTechnicianSchedule(baseUrl: string, token: string, sche
   return request<TechnicianSchedule>(baseUrl, `/tecnico/agendamentos/${scheduleId}`, token);
 }
 
-export async function getOrderImages(baseUrl: string, token: string, orderNumber: number) {
-  return request<OrderImage[]>(baseUrl, `/images/${orderNumber}`, token);
-}
-
-export async function uploadOrderImage(baseUrl: string, token: string, orderNumber: number, base64Image: string) {
-  await request<{ message?: string }>(baseUrl, '/upload', token, {
-    method: 'POST',
-    body: JSON.stringify({
-      order_number: orderNumber,
-      filename: base64Image,
-    }),
-  });
-}
-
-export async function deleteOrderImage(baseUrl: string, token: string, imageId: number) {
-  await request<{ message?: string }>(baseUrl, `/deleteimage/${imageId}`, token, {
-    method: 'DELETE',
-  });
-}
-
 export async function updateTechnicianScheduleStatus(
   baseUrl: string,
   token: string,
@@ -353,7 +359,13 @@ export async function updateTechnicianScheduleChecklist(
   token: string,
   scheduleId: number,
   payload: {
+<<<<<<< HEAD
     items: string[];
+=======
+    items?: string[];
+    material_checklist?: ScheduleMaterialChecklistItem[];
+    materials?: ScheduleMaterialChecklistItem[];
+>>>>>>> 2b7653d (Push)
   },
 ) {
   return request<TechnicianSchedule>(baseUrl, `/tecnico/agendamentos/${scheduleId}/checklist`, token, {
@@ -367,14 +379,32 @@ export async function recordTechnicianSchedulePayment(
   token: string,
   scheduleId: number,
   payload: {
+    paid: boolean;
     amount: number;
-    payment_method: 'pix' | 'cartao' | 'dinheiro' | 'transferencia';
-    notes?: string | null;
   },
 ) {
   return request<TechnicianSchedule>(baseUrl, `/tecnico/agendamentos/${scheduleId}/pagamento`, token, {
     method: 'POST',
     body: JSON.stringify(payload),
+  });
+}
+
+export async function getTechnicianScheduleImages(baseUrl: string, token: string, scheduleId: number) {
+  return request<ScheduleImage[]>(baseUrl, `/tecnico/agendamentos/${scheduleId}/imagens`, token);
+}
+
+export async function uploadTechnicianScheduleImage(baseUrl: string, token: string, scheduleId: number, base64Image: string) {
+  return request<ScheduleImage>(baseUrl, `/tecnico/agendamentos/${scheduleId}/imagens`, token, {
+    method: 'POST',
+    body: JSON.stringify({
+      filename: base64Image,
+    }),
+  });
+}
+
+export async function deleteTechnicianScheduleImage(baseUrl: string, token: string, scheduleId: number, imageId: number) {
+  await request<{ message?: string }>(baseUrl, `/tecnico/agendamentos/${scheduleId}/imagens/${imageId}`, token, {
+    method: 'DELETE',
   });
 }
 
