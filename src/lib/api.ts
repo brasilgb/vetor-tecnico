@@ -44,6 +44,19 @@ export type TechnicianSchedule = {
     can_edit_service: boolean;
     can_record_local_payment?: boolean;
   };
+  service_closure?: {
+    status?: 'requested' | 'priced' | null;
+    requested_at?: string | null;
+    amount?: string | number | null;
+    priced_at?: string | null;
+    office_whatsapp_url?: string | null;
+  };
+  technician_report?: {
+    diagnosis?: string | null;
+    solution?: string | null;
+    observations?: string | null;
+    updated_at?: string | null;
+  };
   local_payment?: {
     received?: boolean;
     amount?: string | number | null;
@@ -351,6 +364,12 @@ export async function recordTechnicianSchedulePayment(
   return request<TechnicianSchedule>(baseUrl, `/tecnico/agendamentos/${scheduleId}/pagamento`, token, {
     method: 'POST',
     body: JSON.stringify(payload),
+  });
+}
+
+export async function requestTechnicianScheduleClosure(baseUrl: string, token: string, scheduleId: number) {
+  return request<TechnicianSchedule>(baseUrl, `/tecnico/agendamentos/${scheduleId}/solicitar-fechamento`, token, {
+    method: 'POST',
   });
 }
 

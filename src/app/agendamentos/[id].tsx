@@ -3,7 +3,9 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Image, Linking, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Linking, Modal, Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { AppShell } from '@/components/app-shell';
 import { Button, Card, Message, TextMuted, Title } from '@/components/ui-kit';
@@ -17,6 +19,7 @@ import {
   getTechnicianScheduleImages,
   getTechnicianSchedule,
   recordTechnicianSchedulePayment,
+  requestTechnicianScheduleClosure,
   ScheduleMaterialChecklistItem,
   ScheduleImage,
   TechnicianSchedule,
@@ -39,6 +42,7 @@ export default function ScheduleDetailScreen() {
   const [equipmentChecklistLoading, setEquipmentChecklistLoading] = useState(false);
   const [images, setImages] = useState<ScheduleImage[]>([]);
   const [imageLoading, setImageLoading] = useState(false);
+  const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
   const [reportForm, setReportForm] = useState({
     diagnosis: '',
@@ -47,6 +51,7 @@ export default function ScheduleDetailScreen() {
   });
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentLoading, setPaymentLoading] = useState(false);
+  const [closureLoading, setClosureLoading] = useState(false);
   const [observations, setObservations] = useState('');
   const [message, setMessage] = useState<string | null>(null);
 
@@ -63,9 +68,9 @@ export default function ScheduleDetailScreen() {
       const scheduleResponse = await getTechnicianSchedule(baseUrl, token, scheduleId);
       setSchedule(scheduleResponse);
       setReportForm({
-        diagnosis: scheduleResponse.order?.technician_diagnosis ?? '',
-        solution: scheduleResponse.order?.technician_solution ?? '',
-        observations: scheduleResponse.order?.technician_observations ?? '',
+        diagnosis: scheduleResponse.technician_report?.diagnosis ?? '',
+        solution: scheduleResponse.technician_report?.solution ?? '',
+        observations: scheduleResponse.technician_report?.observations ?? '',
       });
       setPaymentAmount(formatPaymentInput(scheduleResponse.local_payment?.amount));
       setImages(await getTechnicianScheduleImages(baseUrl, token, scheduleId));
@@ -85,7 +90,7 @@ export default function ScheduleDetailScreen() {
   const address = useMemo(() => formatAddress(schedule), [schedule]);
   const mapsUrl = useMemo(() => getMapsUrl(address), [address]);
   const canCheckIn = Boolean(schedule && schedule.status !== 3 && !schedule.check_in?.at);
-  const canCheckOut = Boolean(schedule && schedule.status !== 3 && schedule.check_in?.at && !schedule.check_out?.at);
+  const canCheckOut = Boolean(schedule?.available_actions?.can_check_out);
   const materialChecklist = normalizeMaterialChecklist(schedule?.material_checklist);
   const equipmentChecklist = normalizeEquipmentChecklist(schedule);
 
@@ -149,9 +154,9 @@ export default function ScheduleDetailScreen() {
 
       setSchedule(updated);
       setReportForm({
-        diagnosis: updated.order?.technician_diagnosis ?? '',
-        solution: updated.order?.technician_solution ?? '',
-        observations: updated.order?.technician_observations ?? '',
+        diagnosis: updated.technician_report?.diagnosis ?? '',
+        solution: updated.technician_report?.solution ?? '',
+        observations: updated.technician_report?.observations ?? '',
       });
     } catch (error) {
       setMessage(error instanceof ApiError ? error.message : 'Nao foi possivel salvar o relatorio tecnico.');
@@ -232,7 +237,7 @@ export default function ScheduleDetailScreen() {
   async function handleRecordPayment() {
     if (!token || !schedule) return;
 
-    const amount = parsePaymentAmount(paymentAmount);
+    const amount = Number(schedule.service_closure?.amount ?? 0);
 
     if (!amount || amount <= 0) {
       setMessage('Informe um valor maior que zero para marcar como pago.');
@@ -254,6 +259,43 @@ export default function ScheduleDetailScreen() {
     } finally {
       setPaymentLoading(false);
     }
+  }
+
+  async function handleRequestClosure() {
+    if (!token || !schedule) return;
+
+    setClosureLoading(true);
+    setMessage(null);
+
+    try {
+      const updated = await requestTechnicianScheduleClosure(baseUrl, token, schedule.id);
+      setSchedule(updated);
+      setPaymentAmount('');
+    } catch (error) {
+      setMessage(error instanceof ApiError ? error.message : 'Nao foi possivel solicitar o valor do atendimento.');
+    } finally {
+      setClosureLoading(false);
+    }
+  }
+
+  function openClosureWhatsApp() {
+    if (!schedule?.service_closure?.office_whatsapp_url) return;
+
+    const usedMaterials = materialChecklist
+      .filter((item) => item.used)
+      .map((item) => `${item.quantity}x ${item.name}`)
+      .join(', ');
+    const message = [
+      `Solicitação de valor do agendamento #${schedule.schedules_number}.`,
+      schedule.customer?.name ? `Cliente: ${schedule.customer.name}.` : null,
+      schedule.order?.order_number ? `OS: #${schedule.order.order_number}.` : null,
+      usedMaterials ? `Materiais utilizados: ${usedMaterials}.` : 'Nenhum material marcado como utilizado.',
+      'Relatório técnico preenchido no VetorOS.',
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    Linking.openURL(`${schedule.service_closure.office_whatsapp_url}?text=${encodeURIComponent(message)}`);
   }
 
   if (!session) {
@@ -313,7 +355,16 @@ export default function ScheduleDetailScreen() {
           </Card>
 
           <Card>
-            <PanelHeader title="Execução do atendimento" detail={nextActionText(canCheckIn, canCheckOut)} />
+            <PanelHeader
+              title="Execução do atendimento"
+              detail={
+                schedule.service_closure?.status === 'requested'
+                  ? 'Aguardando a empresa definir o valor'
+                  : schedule.service_closure?.status === 'priced'
+                    ? `Valor liberado: ${formatCurrency(schedule.service_closure.amount)}`
+                    : nextActionText(canCheckIn, canCheckOut)
+              }
+            />
             <View style={[styles.actionSummary, { backgroundColor: colors.muted, borderColor: colors.border }]}>
               <View style={[styles.actionSummaryIcon, { backgroundColor: canCheckOut ? colors.success : colors.tint }]}>
                 <MaterialIcons name={canCheckOut ? 'flag' : canCheckIn ? 'my-location' : 'task-alt'} size={20} color="#ffffff" />
@@ -346,7 +397,25 @@ export default function ScheduleDetailScreen() {
                   Registrar check-out
                 </Button>
               ) : null}
-              {!canCheckIn && !canCheckOut ? <TextMuted>Nenhuma ação pendente para este atendimento.</TextMuted> : null}
+              {!canCheckIn && !schedule.check_out?.at && !schedule.service_closure?.status ? (
+                <Button onPress={handleRequestClosure} loading={closureLoading}>
+                  Fechar serviço e solicitar valor
+                </Button>
+              ) : null}
+              {schedule.service_closure?.status === 'requested' ? (
+                <>
+                  <TextMuted>O checkout será liberado quando a empresa informar o valor.</TextMuted>
+                  {schedule.service_closure.office_whatsapp_url ? (
+                    <Button variant="secondary" onPress={openClosureWhatsApp}>
+                      Solicitar prioridade pelo WhatsApp
+                    </Button>
+                  ) : null}
+                  <Button variant="secondary" onPress={() => void loadSchedule()} loading={loading}>
+                    Verificar valor
+                  </Button>
+                </>
+              ) : null}
+              {!canCheckIn && !canCheckOut && schedule.check_out?.at ? <TextMuted>Atendimento finalizado.</TextMuted> : null}
             </View>
           </Card>
 
@@ -365,35 +434,37 @@ export default function ScheduleDetailScreen() {
             </Card>
           ) : null}
 
-          {schedule.order ? (
-            <Card>
-              <PanelHeader
-                title="Relatório técnico"
-                detail={schedule.order.technician_attended_at ? `Atualizado em ${formatDateTime(schedule.order.technician_attended_at)}` : 'Diagnóstico e solução do atendimento'}
-              />
-              <LabeledTextArea
-                label="Diagnóstico"
-                value={reportForm.diagnosis}
-                onChangeText={(value) => setReportForm((current) => ({ ...current, diagnosis: value }))}
-                placeholder="Descreva o problema encontrado"
-              />
-              <LabeledTextArea
-                label="Solução aplicada"
-                value={reportForm.solution}
-                onChangeText={(value) => setReportForm((current) => ({ ...current, solution: value }))}
-                placeholder="Descreva o serviço executado"
-              />
-              <LabeledTextArea
-                label="Observações finais"
-                value={reportForm.observations}
-                onChangeText={(value) => setReportForm((current) => ({ ...current, observations: value }))}
-                placeholder="Inclua recomendações ou informações adicionais"
-              />
-              <Button onPress={handleSaveReport} loading={reportLoading}>
-                Salvar relatório
-              </Button>
-            </Card>
-          ) : null}
+          <Card>
+            <PanelHeader
+              title="Relatório técnico"
+              detail={
+                schedule.technician_report?.updated_at
+                  ? `Atualizado em ${formatDateTime(schedule.technician_report.updated_at)}`
+                  : 'Diagnóstico e solução do atendimento'
+              }
+            />
+            <LabeledTextArea
+              label="Diagnóstico"
+              value={reportForm.diagnosis}
+              onChangeText={(value) => setReportForm((current) => ({ ...current, diagnosis: value }))}
+              placeholder="Descreva o problema encontrado"
+            />
+            <LabeledTextArea
+              label="Solução aplicada"
+              value={reportForm.solution}
+              onChangeText={(value) => setReportForm((current) => ({ ...current, solution: value }))}
+              placeholder="Descreva o serviço executado"
+            />
+            <LabeledTextArea
+              label="Observações finais"
+              value={reportForm.observations}
+              onChangeText={(value) => setReportForm((current) => ({ ...current, observations: value }))}
+              placeholder="Inclua recomendações ou informações adicionais"
+            />
+            <Button onPress={handleSaveReport} loading={reportLoading}>
+              Salvar relatório
+            </Button>
+          </Card>
 
           {schedule.order ? (
             <Card>
@@ -462,7 +533,9 @@ export default function ScheduleDetailScreen() {
               detail={
                 schedule.local_payment?.received
                   ? `Pago: ${formatCurrency(schedule.local_payment.amount)}`
-                  : 'Informe o valor recebido no atendimento'
+                  : schedule.service_closure?.status === 'priced'
+                    ? `Valor definido pela empresa: ${formatCurrency(schedule.service_closure.amount)}`
+                    : 'Solicite o fechamento para receber o valor'
               }
             />
             <View style={styles.paymentRow}>
@@ -474,8 +547,12 @@ export default function ScheduleDetailScreen() {
                 )}
               </View>
               <TextInput
-                value={paymentAmount}
-                onChangeText={(value) => setPaymentAmount(formatPaymentInputText(value))}
+                value={
+                  schedule.service_closure?.status === 'priced'
+                    ? formatPaymentInput(schedule.service_closure.amount)
+                    : paymentAmount
+                }
+                editable={false}
                 keyboardType="decimal-pad"
                 placeholder="0,00"
                 placeholderTextColor={colors.mutedText}
@@ -485,7 +562,11 @@ export default function ScheduleDetailScreen() {
             {schedule.local_payment?.received ? (
               <TextMuted>Pagamento marcado no agendamento. Este valor não foi lançado no caixa.</TextMuted>
             ) : null}
-            <Button onPress={handleRecordPayment} loading={paymentLoading}>
+            <Button
+              onPress={handleRecordPayment}
+              loading={paymentLoading}
+              disabled={schedule.service_closure?.status !== 'priced' || schedule.local_payment?.received}
+            >
               {schedule.local_payment?.received ? 'Atualizar valor pago' : 'Marcar pago no local'}
             </Button>
           </Card>
@@ -500,7 +581,16 @@ export default function ScheduleDetailScreen() {
               <View style={styles.imageGrid}>
                 {images.map((image) => (
                   <View key={image.id} style={[styles.imageTile, { borderColor: colors.border, backgroundColor: colors.muted }]}>
-                    <Image source={{ uri: getScheduleImageUrl(baseUrl, image.schedule_id, image.filename) }} style={styles.scheduleImage} resizeMode="cover" />
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Ampliar foto do atendimento"
+                      onPress={() => setSelectedImageUrl(getScheduleImageUrl(baseUrl, image.schedule_id, image.filename))}
+                      style={({ pressed }) => [styles.imagePreviewButton, pressed && styles.pressed]}>
+                      <Image source={{ uri: getScheduleImageUrl(baseUrl, image.schedule_id, image.filename) }} style={styles.scheduleImage} resizeMode="cover" />
+                      <View style={styles.zoomImageBadge}>
+                        <MaterialIcons name="zoom-in" size={18} color="#ffffff" />
+                      </View>
+                    </Pressable>
                     <Pressable
                       disabled={imageLoading}
                       accessibilityRole="button"
@@ -516,6 +606,8 @@ export default function ScheduleDetailScreen() {
               <TextMuted>Nenhuma foto anexada.</TextMuted>
             )}
           </Card>
+
+          {selectedImageUrl ? <ZoomableImageModal uri={selectedImageUrl} onClose={() => setSelectedImageUrl(null)} /> : null}
 
         </>
       ) : (
@@ -645,6 +737,92 @@ function IconAction({
         {label}
       </Text>
     </Pressable>
+  );
+}
+
+function ZoomableImageModal({ uri, onClose }: { uri: string; onClose: () => void }) {
+  const { width, height } = useWindowDimensions();
+  const scale = useSharedValue(1);
+  const savedScale = useSharedValue(1);
+  const translationX = useSharedValue(0);
+  const translationY = useSharedValue(0);
+  const savedTranslationX = useSharedValue(0);
+  const savedTranslationY = useSharedValue(0);
+
+  const resetZoom = () => {
+    'worklet';
+    scale.value = withTiming(1);
+    savedScale.value = 1;
+    translationX.value = withTiming(0);
+    translationY.value = withTiming(0);
+    savedTranslationX.value = 0;
+    savedTranslationY.value = 0;
+  };
+
+  const pinchGesture = Gesture.Pinch()
+    .onUpdate((event) => {
+      scale.value = Math.min(4, Math.max(1, savedScale.value * event.scale));
+    })
+    .onEnd(() => {
+      savedScale.value = scale.value;
+
+      if (scale.value <= 1) {
+        resetZoom();
+      }
+    });
+
+  const panGesture = Gesture.Pan()
+    .onUpdate((event) => {
+      if (scale.value <= 1) return;
+
+      translationX.value = savedTranslationX.value + event.translationX;
+      translationY.value = savedTranslationY.value + event.translationY;
+    })
+    .onEnd(() => {
+      savedTranslationX.value = translationX.value;
+      savedTranslationY.value = translationY.value;
+    });
+
+  const doubleTapGesture = Gesture.Tap()
+    .numberOfTaps(2)
+    .onEnd(() => {
+      if (scale.value > 1) {
+        resetZoom();
+        return;
+      }
+
+      scale.value = withTiming(2);
+      savedScale.value = 2;
+    });
+
+  const imageStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: translationX.value },
+      { translateY: translationY.value },
+      { scale: scale.value },
+    ],
+  }));
+
+  return (
+    <Modal visible transparent animationType="fade" statusBarTranslucent onRequestClose={onClose}>
+      <View style={styles.imageModal}>
+        <View style={styles.imageModalHeader}>
+          <Text style={styles.imageModalHint}>Use dois dedos ou toque duas vezes para ampliar</Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Fechar imagem ampliada"
+            onPress={onClose}
+            style={({ pressed }) => [styles.imageModalClose, pressed && styles.pressed]}>
+            <MaterialIcons name="close" size={26} color="#ffffff" />
+          </Pressable>
+        </View>
+        <GestureDetector gesture={Gesture.Simultaneous(pinchGesture, panGesture, doubleTapGesture)}>
+          <Animated.View style={[styles.zoomableImageFrame, { width, height: height * 0.78 }, imageStyle]}>
+            <Image source={{ uri }} style={styles.zoomableImage} resizeMode="contain" />
+          </Animated.View>
+        </GestureDetector>
+      </View>
+    </Modal>
   );
 }
 
@@ -814,16 +992,6 @@ function equipmentChecklistDetail(items: { label: string; completed: boolean }[]
   return `${completed}/${items.length} itens concluidos`;
 }
 
-function parsePaymentAmount(value: string) {
-  const digits = value.replace(/\D/g, '');
-
-  if (!digits) return 0;
-
-  const amount = Number(digits) / 100;
-
-  return Number.isFinite(amount) ? amount : 0;
-}
-
 function formatPaymentInput(value: string | number | null | undefined) {
   if (value === null || value === undefined || value === '') return '';
 
@@ -832,14 +1000,6 @@ function formatPaymentInput(value: string | number | null | undefined) {
   if (!Number.isFinite(amount) || amount <= 0) return '';
 
   return formatDecimalCurrency(amount);
-}
-
-function formatPaymentInputText(value: string) {
-  const digits = value.replace(/\D/g, '');
-
-  if (!digits) return '';
-
-  return formatDecimalCurrency(Number(digits) / 100);
 }
 
 function formatCurrency(value: string | number | null | undefined) {
@@ -1127,9 +1287,23 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     overflow: 'hidden',
   },
+  imagePreviewButton: {
+    flex: 1,
+  },
   scheduleImage: {
     width: '100%',
     height: '100%',
+  },
+  zoomImageBadge: {
+    position: 'absolute',
+    bottom: 6,
+    left: 6,
+    width: 30,
+    height: 30,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(15, 23, 36, 0.74)',
   },
   deleteImageButton: {
     position: 'absolute',
@@ -1141,6 +1315,47 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(15, 23, 36, 0.74)',
+  },
+  imageModal: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.96)',
+    overflow: 'hidden',
+  },
+  imageModalHeader: {
+    position: 'absolute',
+    zIndex: 2,
+    top: 46,
+    right: 18,
+    left: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  imageModalHint: {
+    flex: 1,
+    color: '#ffffff',
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '700',
+  },
+  imageModalClose: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.16)',
+  },
+  zoomableImageFrame: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  zoomableImage: {
+    width: '100%',
+    height: '100%',
   },
   loadingState: {
     minHeight: 180,
