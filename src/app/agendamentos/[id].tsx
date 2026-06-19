@@ -168,7 +168,7 @@ export default function ScheduleDetailScreen() {
   async function handleToggleEquipmentChecklist(item: string) {
     if (!token || !schedule) return;
 
-    const completed = new Set(schedule.order?.technician_checklist_items ?? []);
+    const completed = new Set(schedule.technician_checklist_items ?? []);
 
     if (completed.has(item)) {
       completed.delete(item);
@@ -466,36 +466,34 @@ export default function ScheduleDetailScreen() {
             </Button>
           </Card>
 
-          {schedule.order ? (
-            <Card>
-              <PanelHeader title="Checklist técnico" detail={equipmentChecklistDetail(equipmentChecklist)} />
-              {equipmentChecklist.length > 0 ? (
-                <View style={styles.materialList}>
-                  {equipmentChecklist.map((item) => (
-                    <Pressable
-                      key={item.label}
-                      disabled={equipmentChecklistLoading || schedule.status === 3}
-                      onPress={() => handleToggleEquipmentChecklist(item.label)}
-                      style={({ pressed }) => [
-                        styles.materialItem,
-                        {
-                          backgroundColor: colors.muted,
-                          borderColor: item.completed ? colors.success : colors.border,
-                          opacity: equipmentChecklistLoading ? 0.58 : pressed ? 0.72 : 1,
-                        },
-                      ]}>
-                      <MaterialIcons name={item.completed ? 'check-circle' : 'radio-button-unchecked'} size={22} color={item.completed ? colors.success : colors.icon} />
-                      <View style={styles.materialText}>
-                        <Text style={[styles.infoValue, { color: colors.text }]}>{item.label}</Text>
-                      </View>
-                    </Pressable>
-                  ))}
-                </View>
-              ) : (
-                <TextMuted>Sem checklist cadastrado para este equipamento.</TextMuted>
-              )}
-            </Card>
-          ) : null}
+          <Card>
+            <PanelHeader title="Checklist técnico" detail={equipmentChecklistDetail(equipmentChecklist)} />
+            {equipmentChecklist.length > 0 ? (
+              <View style={styles.materialList}>
+                {equipmentChecklist.map((item) => (
+                  <Pressable
+                    key={item.label}
+                    disabled={equipmentChecklistLoading}
+                    onPress={() => handleToggleEquipmentChecklist(item.label)}
+                    style={({ pressed }) => [
+                      styles.materialItem,
+                      {
+                        backgroundColor: colors.muted,
+                        borderColor: item.completed ? colors.success : colors.border,
+                        opacity: equipmentChecklistLoading ? 0.58 : pressed ? 0.72 : 1,
+                      },
+                    ]}>
+                    <MaterialIcons name={item.completed ? 'check-circle' : 'radio-button-unchecked'} size={22} color={item.completed ? colors.success : colors.icon} />
+                    <View style={styles.materialText}>
+                      <Text style={[styles.infoValue, { color: colors.text }]}>{item.label}</Text>
+                    </View>
+                  </Pressable>
+                ))}
+              </View>
+            ) : (
+              <TextMuted>Sem checklist cadastrado para este agendamento.</TextMuted>
+            )}
+          </Card>
 
           <Card>
             <PanelHeader title="Materiais do atendimento" detail={materialChecklistDetail(materialChecklist)} />
@@ -504,7 +502,7 @@ export default function ScheduleDetailScreen() {
                 {materialChecklist.map((item, index) => (
                   <Pressable
                     key={`${item.part_id ?? 'manual'}-${item.name}-${index}`}
-                    disabled={checklistLoading || schedule.status === 3}
+                    disabled={checklistLoading}
                     onPress={() => handleToggleMaterial(index)}
                     style={({ pressed }) => [
                       styles.materialItem,
@@ -970,8 +968,8 @@ function materialChecklistDetail(items: ScheduleMaterialChecklistItem[]) {
 }
 
 function normalizeEquipmentChecklist(schedule: TechnicianSchedule | null) {
-  const availableItems = schedule?.order?.equipment?.checklist_items;
-  const completedItems = new Set(schedule?.order?.technician_checklist_items ?? []);
+  const availableItems = schedule?.technician_checklist;
+  const completedItems = new Set(schedule?.technician_checklist_items ?? []);
 
   if (!Array.isArray(availableItems)) return [];
 
@@ -985,7 +983,7 @@ function normalizeEquipmentChecklist(schedule: TechnicianSchedule | null) {
 }
 
 function equipmentChecklistDetail(items: { label: string; completed: boolean }[]) {
-  if (items.length === 0) return 'Checklist cadastrado no equipamento da OS';
+  if (items.length === 0) return 'Checklist definido no agendamento';
 
   const completed = items.filter((item) => item.completed).length;
 

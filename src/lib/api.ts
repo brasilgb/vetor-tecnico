@@ -29,6 +29,9 @@ export type TechnicianSchedule = {
   details?: string | null;
   material_checklist?: ScheduleMaterialChecklistItem[] | null;
   material_checklist_labels?: string[] | null;
+  technician_checklist?: string[] | null;
+  technician_checklist_items?: string[] | null;
+  technician_checklist_completed_at?: string | null;
   status: number;
   status_label?: string | null;
   observations?: string | null;
