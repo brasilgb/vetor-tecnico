@@ -1,23 +1,56 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import * as SecureStore from 'expo-secure-store';
 import { router } from 'expo-router';
-import { Image, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Image,
+  Pressable,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 
 import { AppShell } from '@/components/app-shell';
-import { Button, Card, Field, Message, TextMuted } from '@/components/ui-kit';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { Field } from '@/components/ui-kit';
 import { ApiError } from '@/lib/api';
 import { useSession } from '@/lib/session-context';
 
+const SAVED_EMAIL_KEY = '@VetorTecnico:email';
+const SAVED_PASSWORD_KEY = '@VetorTecnico:password';
+
 export default function LoginScreen() {
+  const { width } = useWindowDimensions();
   const { isRestoring, session, signIn } = useSession();
-  const colors = Colors[useColorScheme() ?? 'light'];
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberPassword, setRememberPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const isWide = width >= 768;
+
+  useEffect(() => {
+    async function loadCredentials() {
+      try {
+        const [savedEmail, savedPassword] = await Promise.all([
+          SecureStore.getItemAsync(SAVED_EMAIL_KEY),
+          SecureStore.getItemAsync(SAVED_PASSWORD_KEY),
+        ]);
+
+        if (savedEmail && savedPassword) {
+          setEmail(savedEmail);
+          setPassword(savedPassword);
+          setRememberPassword(true);
+        }
+      } catch {
+        // O login continua disponível caso o armazenamento seguro falhe.
+      }
+    }
+
+    loadCredentials();
+  }, []);
 
   useEffect(() => {
     if (!isRestoring && session) {
@@ -26,7 +59,9 @@ export default function LoginScreen() {
   }, [isRestoring, session]);
 
   async function handleLogin() {
-    if (!email.trim() || !password) {
+    const normalizedEmail = email.trim();
+
+    if (!normalizedEmail || !password) {
       setMessage('Informe e-mail e senha.');
       return;
     }
@@ -35,93 +70,155 @@ export default function LoginScreen() {
     setMessage(null);
 
     try {
-      await signIn(email.trim(), password);
+      await signIn(normalizedEmail, password);
+
+      try {
+        if (rememberPassword) {
+          await Promise.all([
+            SecureStore.setItemAsync(SAVED_EMAIL_KEY, normalizedEmail),
+            SecureStore.setItemAsync(SAVED_PASSWORD_KEY, password),
+          ]);
+        } else {
+          await Promise.all([
+            SecureStore.deleteItemAsync(SAVED_EMAIL_KEY),
+            SecureStore.deleteItemAsync(SAVED_PASSWORD_KEY),
+          ]);
+        }
+      } catch {
+        // A autenticação concluída não depende da persistência local.
+      }
     } catch (error) {
-      setMessage(error instanceof ApiError ? error.message : 'E-mail e/ou senha invalidos.');
+      setMessage(error instanceof ApiError ? error.message : 'E-mail e/ou senha inválidos.');
     } finally {
       setLoading(false);
     }
   }
 
+  if (isRestoring) {
+    return (
+      <View style={styles.restoring}>
+        <ActivityIndicator color="#00b4ff" size="large" />
+        <Text style={styles.restoringText}>Preparando sua área técnica...</Text>
+      </View>
+    );
+  }
+
   return (
-<<<<<<< HEAD
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.keyboardView}>
-      <AppShell centered>
-        <View style={styles.loginLayout}>
-          <View style={styles.brandPanel}>
-            <View style={styles.logoCard}>
-              <Image source={require('@/assets/images/logo.png')} style={styles.logo} resizeMode="contain" />
-            </View>
-            <Text style={styles.brandKicker}>Operação técnica</Text>
-            <Text style={styles.brandTitle}>VetorOS Técnico</Text>
-            <Text style={styles.brandText}>Agenda, dados da OS e registros de execução reunidos em uma área de trabalho objetiva.</Text>
-          </View>
-=======
     <AppShell centered avoidKeyboard>
-      <View style={styles.loginLayout}>
-        <View style={styles.brandPanel}>
+      <View style={[styles.loginLayout, isWide && styles.loginLayoutWide]}>
+        <View style={[styles.brandPanel, isWide && styles.panelWide]}>
           <View style={styles.logoCard}>
             <Image source={require('@/assets/images/logo.png')} style={styles.logo} resizeMode="contain" />
           </View>
-          <Text style={styles.brandKicker}>Operacao tecnica</Text>
-          <Text style={styles.brandTitle}>VetorOS Tecnico</Text>
-          <Text style={styles.brandText}>Agenda, dados do atendimento e registros de execucao reunidos em uma area de trabalho objetiva.</Text>
+          <Text style={styles.brandKicker}>Operação técnica</Text>
+          <Text style={styles.brandTitle}>VetorOS Técnico</Text>
+          <Text style={styles.brandText}>Agenda, dados da OS e registros de execução reunidos em uma área de trabalho objetiva.</Text>
         </View>
->>>>>>> 2b7653d (Push)
 
-          <Card style={styles.loginCard}>
-            <View>
-              <Text style={[styles.formTitle, { color: colors.text }]}>Acesso do técnico</Text>
-              <TextMuted>Informe suas credenciais para abrir sua agenda.</TextMuted>
+        <View style={[styles.loginCard, isWide && styles.panelWide]}>
+          <View>
+            <Text style={styles.formTitle}>Acesso do técnico</Text>
+            <Text style={styles.formDescription}>Informe suas credenciais para abrir sua agenda.</Text>
+          </View>
+          <Field
+            label="E-mail"
+            value={email}
+            onChangeText={(value) => {
+              setEmail(value);
+              if (message) setMessage(null);
+            }}
+            placeholder="E-mail"
+            autoCapitalize="none"
+            keyboardType="email-address"
+            returnKeyType="next"
+            leftIcon={<MaterialIcons name="mail" size={21} color="#a8b3c7" />}
+          />
+          <Field
+            label="Senha"
+            value={password}
+            onChangeText={(value) => {
+              setPassword(value);
+              if (message) setMessage(null);
+            }}
+            placeholder="Senha"
+            secureTextEntry={!showPassword}
+            returnKeyType="go"
+            onSubmitEditing={handleLogin}
+            leftIcon={<MaterialIcons name="lock" size={21} color="#a8b3c7" />}
+            rightIcon={
+              <Pressable
+                accessibilityLabel={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                onPress={() => setShowPassword((current) => !current)}
+                style={({ pressed }) => [styles.passwordButton, pressed && styles.pressed]}>
+                <MaterialIcons name={showPassword ? 'visibility-off' : 'visibility'} size={24} color="#a8b3c7" />
+              </Pressable>
+            }
+          />
+
+          <Pressable
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: rememberPassword }}
+            onPress={() => setRememberPassword((current) => !current)}
+            style={({ pressed }) => [styles.rememberRow, pressed && styles.pressed]}>
+            <View style={[styles.checkbox, rememberPassword && styles.checkboxChecked]}>
+              {rememberPassword ? <MaterialIcons name="check" size={16} color="#ffffff" /> : null}
             </View>
-            <Field
-              label="E-mail"
-              value={email}
-              onChangeText={setEmail}
-              autoCapitalize="none"
-              keyboardType="email-address"
-              leftIcon={<MaterialIcons name="mail" size={21} color="#637083" />}
-            />
-            <Field
-              label="Senha"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry={!showPassword}
-              leftIcon={<MaterialIcons name="lock" size={21} color="#637083" />}
-              rightIcon={
-                <Pressable
-                  onPress={() => setShowPassword((current) => !current)}
-                  style={({ pressed }) => [styles.passwordButton, pressed && styles.pressed]}>
-                  <MaterialIcons name={showPassword ? 'visibility-off' : 'visibility'} size={24} color="#637083" />
-                </Pressable>
-              }
-            />
-            {message ? <Message tone="error">{message}</Message> : null}
-            <Button onPress={handleLogin} loading={loading}>
-              Entrar
-            </Button>
-          </Card>
+            <Text style={styles.rememberText}>Lembrar senha</Text>
+          </Pressable>
+
+          {message ? (
+            <View style={styles.errorBox} accessibilityRole="alert">
+              <MaterialIcons name="error-outline" size={19} color="#f97066" />
+              <Text style={styles.errorText}>{message}</Text>
+            </View>
+          ) : null}
+
+          <Pressable
+            accessibilityRole="button"
+            disabled={loading}
+            onPress={handleLogin}
+            style={({ pressed }) => [styles.loginButton, (pressed || loading) && styles.buttonDisabled]}>
+            {loading ? (
+              <ActivityIndicator color="#0b1220" />
+            ) : (
+              <>
+                <Text style={styles.loginButtonText}>Entrar</Text>
+                <MaterialIcons name="arrow-forward" size={20} color="#0b1220" />
+              </>
+            )}
+          </Pressable>
         </View>
-      </AppShell>
-    </KeyboardAvoidingView>
+      </View>
+    </AppShell>
   );
 }
 
 const styles = StyleSheet.create({
-  keyboardView: {
+  restoring: {
     flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 14,
+    backgroundColor: '#0b1220',
+  },
+  restoringText: {
+    color: '#a8b3c7',
+    fontSize: 14,
+    fontWeight: '600',
   },
   loginLayout: {
     width: '100%',
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'stretch',
     gap: 18,
   },
+  loginLayoutWide: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+  },
+  panelWide: {
+    flex: 1,
+  },
   brandPanel: {
-    flexGrow: 1,
-    flexBasis: 320,
-    borderRadius: 8,
+    borderRadius: 16,
     padding: 24,
     justifyContent: 'center',
     backgroundColor: '#15365f',
@@ -129,7 +226,7 @@ const styles = StyleSheet.create({
   logoCard: {
     width: 84,
     height: 84,
-    borderRadius: 8,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
@@ -163,24 +260,98 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   loginCard: {
-    flexGrow: 1,
-    flexBasis: 340,
+    width: '100%',
     justifyContent: 'center',
+    gap: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 244, 239, 0.12)',
+    backgroundColor: '#101a2d',
+    padding: 20,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 18,
+    elevation: 5,
   },
   formTitle: {
-    color: '#172033',
+    color: '#f5f4ef',
     fontSize: 22,
     lineHeight: 28,
     fontWeight: '900',
+  },
+  formDescription: {
+    marginTop: 4,
+    color: '#a8b3c7',
+    fontSize: 14,
+    lineHeight: 20,
   },
   passwordButton: {
     width: 40,
     height: 40,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 8,
+    borderRadius: 10,
+  },
+  rememberRow: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    marginRight: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 244, 239, 0.18)',
+  },
+  checkboxChecked: {
+    borderColor: '#00b4ff',
+    backgroundColor: '#00b4ff',
+  },
+  rememberText: {
+    color: '#f5f4ef',
+    fontSize: 14,
+  },
+  errorBox: {
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(249, 112, 102, 0.35)',
+    backgroundColor: 'rgba(249, 112, 102, 0.1)',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  errorText: {
+    flex: 1,
+    color: '#f97066',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  loginButton: {
+    minHeight: 56,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderRadius: 12,
+    backgroundColor: '#00b4ff',
+  },
+  loginButtonText: {
+    color: '#0b1220',
+    fontSize: 16,
+    fontWeight: '800',
   },
   pressed: {
     opacity: 0.72,
+  },
+  buttonDisabled: {
+    opacity: 0.55,
   },
 });

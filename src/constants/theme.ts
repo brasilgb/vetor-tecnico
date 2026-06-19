@@ -5,39 +5,26 @@
 
 import { Platform } from 'react-native';
 
-const tintColorDark = '#2f7dd1';
+const appColors = {
+  text: '#f5f4ef',
+  background: '#0b1220',
+  tint: '#00b4ff',
+  tintText: '#0b1220',
+  card: '#101a2d',
+  muted: '#18243a',
+  mutedText: '#a8b3c7',
+  border: 'rgba(245, 244, 239, 0.12)',
+  accent: '#0d47a1',
+  accentText: '#ffffff',
+  success: '#00e59b',
+  icon: '#a8b3c7',
+  tabIconDefault: '#a8b3c7',
+  tabIconSelected: '#00b4ff',
+};
 
 export const Colors = {
-  light: {
-    text: '#172033',
-    background: '#eef2f7',
-    tint: '#2f7dd1',
-    card: '#ffffff',
-    muted: '#f4f7fb',
-    mutedText: '#637083',
-    border: '#d8e0ea',
-    accent: '#15365f',
-    accentText: '#ffffff',
-    success: '#197a55',
-    icon: '#637083',
-    tabIconDefault: '#637083',
-    tabIconSelected: '#2f7dd1',
-  },
-  dark: {
-    text: '#eef3f8',
-    background: '#0f1724',
-    tint: tintColorDark,
-    card: '#151f2d',
-    muted: '#1e2a3b',
-    mutedText: '#a6b2c2',
-    border: '#2f3d50',
-    accent: '#234b7b',
-    accentText: '#ffffff',
-    success: '#32b07c',
-    icon: '#a6b2c2',
-    tabIconDefault: '#a6b2c2',
-    tabIconSelected: tintColorDark,
-  },
+  light: appColors,
+  dark: appColors,
 };
 
 export const Fonts = Platform.select({

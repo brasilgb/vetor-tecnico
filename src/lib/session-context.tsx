@@ -52,18 +52,15 @@ export function SessionProvider({ children }: PropsWithChildren) {
   }, []);
 
   useEffect(() => {
-    if (!session) {
-      return;
-    }
+    if (!session) return;
 
     registerForTechnicianPushNotifications(DEFAULT_BASE_URL, session.accessToken).catch((error) => {
       console.warn('Nao foi possivel registrar notificacoes push do tecnico.', error);
     });
+
     const subscription = listenForTechnicianNotificationResponses();
 
-    return () => {
-      subscription.remove();
-    };
+    return () => subscription.remove();
   }, [session]);
 
   const value = useMemo<SessionContextValue>(
@@ -91,26 +88,15 @@ export function SessionProvider({ children }: PropsWithChildren) {
         router.replace('/home');
       },
       async signOut() {
-<<<<<<< HEAD
         if (session) {
           await unregisterTechnicianPushNotifications(DEFAULT_BASE_URL, session.accessToken);
           await logoutRequest(DEFAULT_BASE_URL, session.accessToken).catch(() => undefined);
         }
+
         await clearTechnicianLocalNotificationHistory();
         await AsyncStorage.removeItem(STORAGE_SESSION);
-=======
-        const serverLogout = session
-          ? logoutRequest(DEFAULT_BASE_URL, session.accessToken).catch(() => undefined)
-          : Promise.resolve();
-
->>>>>>> 2b7653d (Push)
         setSession(null);
         router.replace('/' as never);
-
-        await Promise.allSettled([
-          AsyncStorage.removeItem(STORAGE_SESSION),
-          serverLogout,
-        ]);
       },
     }),
     [isRestoring, session],

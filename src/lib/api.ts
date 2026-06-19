@@ -111,29 +111,6 @@ export type TechnicianSchedule = {
     service_cost?: string | number | null;
     delivery_forecast?: string | null;
     delivery_date?: string | null;
-<<<<<<< HEAD
-    service_status?: number | null;
-    service_status_label?: string | null;
-    equipment?: {
-      id: number;
-      equipment_number?: number;
-      equipment?: string | null;
-      checklist_items?: string[];
-    } | null;
-    mobile_summary?: {
-      images_count: number;
-      has_images: boolean;
-      previous_orders_count: number;
-      has_recurrence: boolean;
-      same_defect_count?: number;
-      has_active_warranty: boolean;
-      local_payment_received: boolean;
-      has_check_in: boolean;
-      has_check_out: boolean;
-      has_technician_notes: boolean;
-    };
-=======
->>>>>>> 2b7653d (Push)
     order_payments?: {
       id: number;
       amount: string | number;
@@ -172,10 +149,6 @@ export type TechnicianDashboard = {
     today: number;
     pending: number;
     in_progress?: number;
-<<<<<<< HEAD
-    overdue?: number;
-=======
->>>>>>> 2b7653d (Push)
     completed: number;
   };
   current_schedule?: TechnicianSchedule | null;
@@ -191,7 +164,7 @@ export type PaginatedResult<T> = {
 };
 
 export type TechnicianScheduleQuery = {
-  period?: 'today' | 'tomorrow' | 'week' | 'pending' | 'overdue' | 'completed';
+  period?: 'today' | 'tomorrow' | 'week' | 'pending' | 'completed';
   date_from?: string;
   date_to?: string;
   status?: number;
@@ -237,11 +210,7 @@ async function request<T>(
   const json = (await response.json().catch(() => ({}))) as Partial<ApiEnvelope<T>>;
 
   if (!response.ok) {
-    if (response.status === 401) {
-      throw new ApiError('Sessão expirada. Entre novamente.', response.status, json.errors);
-    }
-
-    throw new ApiError(json.message ?? 'Não foi possível concluir a requisição.', response.status, json.errors);
+    throw new ApiError(json.message ?? 'Nao foi possivel concluir a requisicao.', response.status, json.errors);
   }
 
   return json.result as T;
@@ -262,7 +231,7 @@ export async function login(baseUrl: string, email: string, password: string) {
   };
 
   if (!response.ok) {
-    throw new ApiError(json.message ?? 'Não foi possível fazer login.', response.status, json.errors);
+    throw new ApiError(json.message ?? 'Nao foi possivel fazer login.', response.status, json.errors);
   }
 
   if (!json.result || !json.access_token) {
@@ -359,13 +328,9 @@ export async function updateTechnicianScheduleChecklist(
   token: string,
   scheduleId: number,
   payload: {
-<<<<<<< HEAD
-    items: string[];
-=======
     items?: string[];
     material_checklist?: ScheduleMaterialChecklistItem[];
     materials?: ScheduleMaterialChecklistItem[];
->>>>>>> 2b7653d (Push)
   },
 ) {
   return request<TechnicianSchedule>(baseUrl, `/tecnico/agendamentos/${scheduleId}/checklist`, token, {

@@ -21,18 +21,11 @@
         "foregroundImage": "./assets/images/icon.png",
         "backgroundColor": "#0b1220"
       },
-<<<<<<< HEAD
       "usesCleartextTraffic": true,
-      "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false,
-      "package": "com.andersonbrodrigues.vetortecnico",
-      "googleServicesFile": "./google-services.json"
-=======
       "edgeToEdgeEnabled": false,
       "softwareKeyboardLayoutMode": "resize",
       "predictiveBackGestureEnabled": false,
       "package": "com.andersonbrodrigues.vetorostecnico"
->>>>>>> 2b7653d (Push)
     },
     "web": {
       "output": "static",
@@ -40,6 +33,7 @@
     },
     "plugins": [
       "expo-router",
+      "expo-secure-store",
       [
         "expo-location",
         {

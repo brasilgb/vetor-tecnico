@@ -1,16 +1,14 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
-import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { Dispatch, SetStateAction, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Image, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useCallback, useMemo, useState } from 'react';
+import { ActivityIndicator, Alert, Image, Linking, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { AppShell } from '@/components/app-shell';
 import { Button, Card, Message, TextMuted, Title } from '@/components/ui-kit';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   ApiError,
   checkInTechnicianSchedule,
@@ -22,10 +20,6 @@ import {
   ScheduleMaterialChecklistItem,
   ScheduleImage,
   TechnicianSchedule,
-<<<<<<< HEAD
-  uploadOrderImage,
-=======
->>>>>>> 2b7653d (Push)
   updateTechnicianScheduleChecklist,
   updateTechnicianScheduleReport,
   uploadTechnicianScheduleImage,
@@ -33,179 +27,40 @@ import {
 import { useSession } from '@/lib/session-context';
 
 type ActionKind = 'check-in' | 'check-out';
-<<<<<<< HEAD
-type PaymentMethod = 'pix' | 'cartao' | 'dinheiro' | 'transferencia';
-type DetailSection = 'report' | 'images';
-
-type CachedScheduleData = {
-  schedule: TechnicianSchedule;
-  images: OrderImage[];
-  savedAt: string;
-};
-
-type PendingScheduleActions = {
-  report?: {
-    technician_diagnosis?: string | null;
-    technician_solution?: string | null;
-    technician_observations?: string | null;
-  };
-  checklist?: {
-    items: string[];
-  };
-  savedAt: string;
-};
-
-const paymentMethods: { label: string; value: PaymentMethod; icon: keyof typeof MaterialIcons.glyphMap }[] = [
-  { label: 'Pix', value: 'pix', icon: 'qr-code-2' },
-  { label: 'Cartão', value: 'cartao', icon: 'credit-card' },
-  { label: 'Dinheiro', value: 'dinheiro', icon: 'payments' },
-  { label: 'Transferência', value: 'transferencia', icon: 'account-balance' },
-];
-=======
->>>>>>> 2b7653d (Push)
 
 export default function ScheduleDetailScreen() {
   const colors = Colors[useColorScheme() ?? 'light'];
-  const router = useRouter();
-  const params = useLocalSearchParams<{ id?: string; section?: string }>();
+  const params = useLocalSearchParams<{ id?: string }>();
   const { baseUrl, session } = useSession();
-  const insets = useSafeAreaInsets();
-  const scrollRef = useRef<ScrollView | null>(null);
-  const sectionOffsets = useRef<Partial<Record<DetailSection, number>>>({});
   const [schedule, setSchedule] = useState<TechnicianSchedule | null>(null);
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<ActionKind | null>(null);
-<<<<<<< HEAD
-  const [images, setImages] = useState<OrderImage[]>([]);
-  const [selectedImage, setSelectedImage] = useState<OrderImage | null>(null);
-  const [imageLoading, setImageLoading] = useState(false);
-  const [reportLoading, setReportLoading] = useState(false);
-  const [checklistLoading, setChecklistLoading] = useState(false);
-  const [paymentLoading, setPaymentLoading] = useState(false);
-=======
   const [checklistLoading, setChecklistLoading] = useState(false);
   const [equipmentChecklistLoading, setEquipmentChecklistLoading] = useState(false);
   const [images, setImages] = useState<ScheduleImage[]>([]);
   const [imageLoading, setImageLoading] = useState(false);
   const [reportLoading, setReportLoading] = useState(false);
->>>>>>> 2b7653d (Push)
   const [reportForm, setReportForm] = useState({
     diagnosis: '',
     solution: '',
     observations: '',
   });
-<<<<<<< HEAD
-  const [paymentForm, setPaymentForm] = useState<{
-    amount: string;
-    method: PaymentMethod;
-    notes: string;
-  }>({
-    amount: '',
-    method: 'pix',
-    notes: '',
-  });
-  const [checklistFormItems, setChecklistFormItems] = useState<string[]>([]);
-  const [pendingActions, setPendingActions] = useState<PendingScheduleActions | null>(null);
-=======
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentLoading, setPaymentLoading] = useState(false);
->>>>>>> 2b7653d (Push)
   const [observations, setObservations] = useState('');
   const [message, setMessage] = useState<string | null>(null);
 
   const token = session?.accessToken;
-  const tenantId = session?.user.tenant_id;
   const scheduleId = Number(params.id);
-  const targetSection = params.section === 'report' || params.section === 'images' ? params.section : null;
-
-  const applyScheduleState = useCallback((nextSchedule: TechnicianSchedule, nextImages: OrderImage[]) => {
-    setSchedule(nextSchedule);
-    setReportForm({
-      diagnosis: nextSchedule.order?.technician_diagnosis ?? '',
-      solution: nextSchedule.order?.technician_solution ?? '',
-      observations: nextSchedule.order?.technician_observations ?? '',
-    });
-    setChecklistFormItems(getChecklistFormItems(nextSchedule));
-    setImages(nextImages);
-  }, []);
-
-  const persistScheduleCache = useCallback(
-    async (nextSchedule: TechnicianSchedule, nextImages: OrderImage[]) => {
-      if (!tenantId) return;
-
-      await AsyncStorage.setItem(
-        getScheduleCacheKey(tenantId, nextSchedule.id),
-        JSON.stringify({
-          schedule: nextSchedule,
-          images: nextImages,
-          savedAt: new Date().toISOString(),
-        }),
-      ).catch(() => undefined);
-    },
-    [tenantId],
-  );
-
-  const syncPendingScheduleActions = useCallback(
-    async (nextSchedule: TechnicianSchedule) => {
-      if (!tenantId || !token) return nextSchedule;
-
-      const pendingKey = getPendingScheduleKey(tenantId, nextSchedule.id);
-      const pending = await readCache<PendingScheduleActions>(pendingKey);
-
-      if (!pending) {
-        setPendingActions(null);
-        return nextSchedule;
-      }
-
-      let syncedSchedule = nextSchedule;
-
-      if (pending.report) {
-        syncedSchedule = await updateTechnicianScheduleReport(baseUrl, token, syncedSchedule.id, pending.report);
-      }
-
-      if (pending.checklist) {
-        syncedSchedule = await updateTechnicianScheduleChecklist(baseUrl, token, syncedSchedule.id, pending.checklist);
-      }
-
-      await AsyncStorage.removeItem(pendingKey);
-      setPendingActions(null);
-      setMessage('Alterações pendentes sincronizadas.');
-
-      return syncedSchedule;
-    },
-    [baseUrl, tenantId, token],
-  );
 
   const loadSchedule = useCallback(async () => {
-    if (!token || !tenantId || !Number.isFinite(scheduleId)) return;
+    if (!token || !Number.isFinite(scheduleId)) return;
 
     setLoading(true);
     setMessage(null);
-    const cacheKey = getScheduleCacheKey(tenantId, scheduleId);
-    const pendingKey = getPendingScheduleKey(tenantId, scheduleId);
-    const cachedData = await readCache<CachedScheduleData>(cacheKey);
-    const pendingData = await readCache<PendingScheduleActions>(pendingKey);
-
-    setPendingActions(pendingData);
-
-    if (cachedData) {
-      applyScheduleState(cachedData.schedule, cachedData.images);
-    }
 
     try {
       const scheduleResponse = await getTechnicianSchedule(baseUrl, token, scheduleId);
-<<<<<<< HEAD
-      let nextImages: OrderImage[] = [];
-
-      if (scheduleResponse.order?.order_number) {
-        nextImages = await getOrderImages(baseUrl, token, scheduleResponse.order.order_number);
-      }
-
-      const syncedSchedule = await syncPendingScheduleActions(scheduleResponse);
-
-      applyScheduleState(syncedSchedule, nextImages);
-      await persistScheduleCache(syncedSchedule, nextImages);
-=======
       setSchedule(scheduleResponse);
       setReportForm({
         diagnosis: scheduleResponse.order?.technician_diagnosis ?? '',
@@ -214,13 +69,12 @@ export default function ScheduleDetailScreen() {
       });
       setPaymentAmount(formatPaymentInput(scheduleResponse.local_payment?.amount));
       setImages(await getTechnicianScheduleImages(baseUrl, token, scheduleId));
->>>>>>> 2b7653d (Push)
     } catch (error) {
-      setMessage(error instanceof ApiError ? error.message : cachedData ? 'Sem conexão. Exibindo atendimento salvo.' : 'Não foi possível carregar o atendimento.');
+      setMessage(error instanceof ApiError ? error.message : 'Nao foi possivel carregar o atendimento.');
     } finally {
       setLoading(false);
     }
-  }, [applyScheduleState, baseUrl, persistScheduleCache, scheduleId, syncPendingScheduleActions, tenantId, token]);
+  }, [baseUrl, scheduleId, token]);
 
   useFocusEffect(
     useCallback(() => {
@@ -228,43 +82,12 @@ export default function ScheduleDetailScreen() {
     }, [loadSchedule]),
   );
 
-  useEffect(() => {
-    if (!schedule || !targetSection) return;
-
-    const timeout = setTimeout(() => {
-      const sectionOffset = sectionOffsets.current[targetSection];
-
-      if (typeof sectionOffset === 'number') {
-        scrollRef.current?.scrollTo({ y: Math.max(0, sectionOffset - 12), animated: true });
-      }
-    }, 180);
-
-    return () => clearTimeout(timeout);
-  }, [schedule, targetSection]);
-
   const address = useMemo(() => formatAddress(schedule), [schedule]);
-  const mapsUrl = useMemo(() => schedule?.customer?.quick_actions?.maps_url ?? getMapsUrl(address), [address, schedule]);
-  const phoneUrl = useMemo(() => schedule?.customer?.quick_actions?.phone_url ?? getPhoneUrl(schedule?.customer?.phone), [schedule]);
-  const whatsappUrl = useMemo(() => schedule?.customer?.quick_actions?.whatsapp_url ?? getWhatsAppUrl(schedule?.customer?.whatsapp), [schedule]);
-  const checkoutRequirements = useMemo(() => getCheckoutRequirements(schedule, pendingActions), [pendingActions, schedule]);
-  const checklistItems = useMemo(() => getChecklistItems(schedule), [schedule]);
-  const savedChecklistItems = useMemo(() => getChecklistFormItems(schedule), [schedule]);
-  const isChecklistDirty = useMemo(
-    () => !sameStringSet(checklistFormItems, savedChecklistItems),
-    [checklistFormItems, savedChecklistItems],
-  );
+  const mapsUrl = useMemo(() => getMapsUrl(address), [address]);
   const canCheckIn = Boolean(schedule && schedule.status !== 3 && !schedule.check_in?.at);
-<<<<<<< HEAD
-  const canAttemptCheckOut = Boolean(schedule && schedule.status !== 3 && schedule.check_in?.at && !schedule.check_out?.at);
-  const canCheckOut = canAttemptCheckOut && checkoutRequirements.length === 0;
-  const imageLimit = getImageLimit(schedule, images.length);
-  const canUploadImage = schedule?.available_actions?.can_upload_images !== false && images.length < imageLimit;
-  const paymentSummary = getPaymentSummary(schedule);
-=======
   const canCheckOut = Boolean(schedule && schedule.status !== 3 && schedule.check_in?.at && !schedule.check_out?.at);
   const materialChecklist = normalizeMaterialChecklist(schedule?.material_checklist);
   const equipmentChecklist = normalizeEquipmentChecklist(schedule);
->>>>>>> 2b7653d (Push)
 
   async function handleAttendanceAction(kind: ActionKind) {
     if (!token || !schedule) return;
@@ -284,10 +107,9 @@ export default function ScheduleDetailScreen() {
           : await checkOutTechnicianSchedule(baseUrl, token, schedule.id, payload);
 
       setSchedule(updated);
-      await persistScheduleCache(updated, images);
       setObservations('');
     } catch (error) {
-      setMessage(error instanceof ApiError ? error.message : 'Não foi possível registrar a ação.');
+      setMessage(error instanceof ApiError ? error.message : 'Nao foi possivel registrar a acao.');
     } finally {
       setActionLoading(null);
     }
@@ -317,90 +139,28 @@ export default function ScheduleDetailScreen() {
 
     setReportLoading(true);
     setMessage(null);
-    const payload = {
-      technician_diagnosis: normalizeText(reportForm.diagnosis),
-      technician_solution: normalizeText(reportForm.solution),
-      technician_observations: normalizeText(reportForm.observations),
-    };
 
     try {
-      const updated = await updateTechnicianScheduleReport(baseUrl, token, schedule.id, payload);
+      const updated = await updateTechnicianScheduleReport(baseUrl, token, schedule.id, {
+        technician_diagnosis: normalizeText(reportForm.diagnosis),
+        technician_solution: normalizeText(reportForm.solution),
+        technician_observations: normalizeText(reportForm.observations),
+      });
 
       setSchedule(updated);
-      await persistScheduleCache(updated, images);
-      await removePendingScheduleAction(tenantId, schedule.id, 'report', setPendingActions);
       setReportForm({
         diagnosis: updated.order?.technician_diagnosis ?? '',
         solution: updated.order?.technician_solution ?? '',
         observations: updated.order?.technician_observations ?? '',
       });
     } catch (error) {
-      if (!(error instanceof ApiError)) {
-        const optimisticSchedule = applyReportToSchedule(schedule, payload);
-
-        setSchedule(optimisticSchedule);
-        await persistScheduleCache(optimisticSchedule, images);
-        await savePendingScheduleAction(tenantId, schedule.id, { report: payload }, setPendingActions);
-        setMessage('Sem conexão. Relatório salvo para sincronizar.');
-        setReportLoading(false);
-        return;
-      }
-
-      setMessage(error instanceof ApiError ? error.message : 'Não foi possível salvar o relatório técnico.');
+      setMessage(error instanceof ApiError ? error.message : 'Nao foi possivel salvar o relatorio tecnico.');
     } finally {
       setReportLoading(false);
     }
   }
 
-<<<<<<< HEAD
-  function handleToggleChecklistItem(item: string) {
-    setChecklistFormItems((current) => {
-      if (current.includes(item)) {
-        return current.filter((value) => value !== item);
-      }
-
-      return [...current, item];
-    });
-  }
-
-  async function handleSaveChecklist() {
-    if (!token || !schedule) return;
-
-    setChecklistLoading(true);
-    setMessage(null);
-    const payload = {
-      items: normalizeChecklistItems(checklistFormItems),
-    };
-
-    try {
-      const updated = await updateTechnicianScheduleChecklist(baseUrl, token, schedule.id, payload);
-
-      setSchedule(updated);
-      await persistScheduleCache(updated, images);
-      await removePendingScheduleAction(tenantId, schedule.id, 'checklist', setPendingActions);
-      setChecklistFormItems(getChecklistFormItems(updated));
-    } catch (error) {
-      if (!(error instanceof ApiError)) {
-        const optimisticSchedule = applyChecklistToSchedule(schedule, payload.items);
-
-        setSchedule(optimisticSchedule);
-        await persistScheduleCache(optimisticSchedule, images);
-        await savePendingScheduleAction(tenantId, schedule.id, { checklist: payload }, setPendingActions);
-        setMessage('Sem conexão. Checklist salvo para sincronizar.');
-        setChecklistLoading(false);
-        return;
-      }
-
-      setMessage(error instanceof ApiError ? error.message : 'Não foi possível salvar o checklist.');
-    } finally {
-      setChecklistLoading(false);
-    }
-  }
-
-  async function handleRecordPayment() {
-=======
   async function handleToggleEquipmentChecklist(item: string) {
->>>>>>> 2b7653d (Push)
     if (!token || !schedule) return;
 
     const completed = new Set(schedule.order?.technician_checklist_items ?? []);
@@ -419,20 +179,8 @@ export default function ScheduleDetailScreen() {
         items: Array.from(completed),
       });
       setSchedule(updated);
-<<<<<<< HEAD
-      await persistScheduleCache(updated, images);
-      setPaymentForm({ amount: '', method: 'pix', notes: '' });
-      setMessage('Pagamento enviado para conferencia do caixa.');
-    } catch (error) {
-<<<<<<< HEAD
-      setMessage(error instanceof ApiError ? error.message : 'Não foi possível registrar o pagamento.');
-=======
-      setMessage(error instanceof ApiError ? error.message : 'Nao foi possivel enviar o pagamento para conferencia.');
->>>>>>> b28bf68ccd1ee2a12e680d8ff531859bc1f402b9
-=======
     } catch (error) {
       setMessage(error instanceof ApiError ? error.message : 'Nao foi possivel atualizar o checklist tecnico.');
->>>>>>> 2b7653d (Push)
     } finally {
       setEquipmentChecklistLoading(false);
     }
@@ -449,17 +197,10 @@ export default function ScheduleDetailScreen() {
 
       if (result.canceled || !result.assets[0]?.base64) return;
 
-<<<<<<< HEAD
-      await uploadOrderImage(baseUrl, token, schedule.order.order_number, result.assets[0].base64);
-      const nextImages = await getOrderImages(baseUrl, token, schedule.order.order_number);
-      setImages(nextImages);
-      await persistScheduleCache(schedule, nextImages);
-=======
       await uploadTechnicianScheduleImage(baseUrl, token, schedule.id, result.assets[0].base64);
       setImages(await getTechnicianScheduleImages(baseUrl, token, schedule.id));
->>>>>>> 2b7653d (Push)
     } catch (error) {
-      setMessage(error instanceof ApiError ? error.message : 'Não foi possível anexar a imagem.');
+      setMessage(error instanceof ApiError ? error.message : 'Nao foi possivel anexar a imagem.');
     } finally {
       setImageLoading(false);
     }
@@ -472,57 +213,22 @@ export default function ScheduleDetailScreen() {
     setMessage(null);
 
     try {
-<<<<<<< HEAD
-      await deleteOrderImage(baseUrl, token, image.id);
-      const nextImages = images.filter((item) => item.id !== image.id);
-      setImages(nextImages);
-      setSelectedImage((current) => (current?.id === image.id ? null : current));
-      await persistScheduleCache(schedule, nextImages);
-=======
       await deleteTechnicianScheduleImage(baseUrl, token, schedule.id, image.id);
       setImages((current) => current.filter((item) => item.id !== image.id));
->>>>>>> 2b7653d (Push)
     } catch (error) {
-      setMessage(error instanceof ApiError ? error.message : 'Não foi possível remover a imagem.');
+      setMessage(error instanceof ApiError ? error.message : 'Nao foi possivel remover a imagem.');
     } finally {
       setImageLoading(false);
     }
   }
 
-<<<<<<< HEAD
-  async function handleSyncPendingActions() {
-    if (!token || !schedule) return;
-
-    setLoading(true);
-    setMessage(null);
-
-    try {
-      const refreshedSchedule = await getTechnicianSchedule(baseUrl, token, schedule.id);
-      let nextImages = images;
-
-      if (refreshedSchedule.order?.order_number) {
-        nextImages = await getOrderImages(baseUrl, token, refreshedSchedule.order.order_number);
-      }
-
-      const syncedSchedule = await syncPendingScheduleActions(refreshedSchedule);
-
-      applyScheduleState(syncedSchedule, nextImages);
-      await persistScheduleCache(syncedSchedule, nextImages);
-    } catch (error) {
-      setMessage(error instanceof ApiError ? error.message : 'Não foi possível sincronizar as alterações agora.');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  function handleConfirmDeleteImage(image: OrderImage) {
-    Alert.alert('Remover imagem?', 'A imagem será excluída deste atendimento.', [
+  function confirmDeleteImage(image: ScheduleImage) {
+    Alert.alert('Remover foto?', 'A foto será excluída permanentemente deste atendimento.', [
       { text: 'Cancelar', style: 'cancel' },
-      { text: 'Remover', style: 'destructive', onPress: () => handleDeleteImage(image) },
+      { text: 'Remover', style: 'destructive', onPress: () => void handleDeleteImage(image) },
     ]);
   }
 
-=======
   async function handleRecordPayment() {
     if (!token || !schedule) return;
 
@@ -550,7 +256,6 @@ export default function ScheduleDetailScreen() {
     }
   }
 
->>>>>>> 2b7653d (Push)
   if (!session) {
     return (
       <AppShell>
@@ -560,19 +265,8 @@ export default function ScheduleDetailScreen() {
   }
 
   return (
-    <AppShell scrollRef={scrollRef}>
-      <View style={[styles.pageHeader, { backgroundColor: colors.accent, paddingTop: Math.max(18, insets.top + 12) }]}>
-        <View style={styles.headerActions}>
-          <Pressable onPress={() => router.back()} style={({ pressed }) => [styles.headerIconButton, pressed && styles.pressed]}>
-            <MaterialIcons name="arrow-back" size={22} color="#ffffff" />
-          </Pressable>
-          <Pressable
-            disabled={loading}
-            onPress={loadSchedule}
-            style={({ pressed }) => [styles.headerIconButton, { opacity: loading ? 0.58 : pressed ? 0.72 : 1 }]}>
-            <MaterialIcons name={loading ? 'sync' : 'refresh'} size={22} color="#ffffff" />
-          </Pressable>
-        </View>
+    <AppShell>
+      <View style={[styles.pageHeader, { backgroundColor: colors.accent }]}>
         <View style={styles.headerTitleWrap}>
           <Text style={styles.headerEyebrow}>Atendimento técnico</Text>
           <Text style={styles.headerTitle} numberOfLines={1}>
@@ -580,17 +274,17 @@ export default function ScheduleDetailScreen() {
           </Text>
           <Text style={styles.headerDetail}>{schedule ? formatDateTime(schedule.schedules) : 'Sincronizando dados do atendimento'}</Text>
         </View>
+        <Pressable
+          disabled={loading}
+          accessibilityRole="button"
+          accessibilityLabel="Atualizar atendimento"
+          onPress={loadSchedule}
+          style={({ pressed }) => [styles.headerIconButton, { opacity: loading ? 0.58 : pressed ? 0.72 : 1 }]}>
+          {loading ? <ActivityIndicator size="small" color="#ffffff" /> : <MaterialIcons name="refresh" size={22} color="#ffffff" />}
+        </Pressable>
       </View>
 
       {message ? <Message tone="error">{message}</Message> : null}
-      {pendingActions ? (
-        <Card>
-          <DataNote icon="sync-problem" title="Alterações offline" detail={pendingActionsDetail(pendingActions)} />
-          <Button onPress={handleSyncPendingActions} loading={loading}>
-            Sincronizar agora
-          </Button>
-        </Card>
-      ) : null}
 
       {schedule ? (
         <>
@@ -604,58 +298,42 @@ export default function ScheduleDetailScreen() {
             </View>
 
             <View style={styles.infoGrid}>
-<<<<<<< HEAD
               <InfoRow icon="build" label="Serviço" value={schedule.service ?? schedule.details ?? 'Serviço não informado'} />
+              <InfoRow icon="notes" label="Detalhes" value={schedule.details ?? 'Não informado'} />
               <InfoRow icon="place" label="Endereço" value={address ?? 'Endereço não informado'} />
               <InfoRow icon="phone" label="Telefone" value={schedule.customer?.phone ?? 'Não informado'} />
               <InfoRow icon="chat" label="WhatsApp" value={schedule.customer?.whatsapp ?? 'Não informado'} />
-=======
-              <InfoRow icon="build" label="Servico" value={schedule.service ?? schedule.details ?? 'Servico nao informado'} />
-              <InfoRow icon="notes" label="Detalhes" value={schedule.details ?? 'Nao informado'} />
-              <InfoRow icon="place" label="Endereco" value={address ?? 'Endereco nao informado'} />
-              <InfoRow icon="phone" label="Telefone" value={schedule.customer?.phone ?? 'Nao informado'} />
-              <InfoRow icon="chat" label="WhatsApp" value={schedule.customer?.whatsapp ?? 'Nao informado'} />
->>>>>>> 2b7653d (Push)
             </View>
 
             <View style={styles.quickActions}>
               {mapsUrl ? <IconAction icon="route" label="Rota" onPress={() => Linking.openURL(mapsUrl)} /> : null}
-              {phoneUrl ? <IconAction icon="call" label="Ligar" onPress={() => Linking.openURL(phoneUrl)} /> : null}
-              {whatsappUrl ? <IconAction icon="chat" label="Whats" onPress={() => Linking.openURL(whatsappUrl)} /> : null}
+              {schedule.customer?.phone ? <IconAction icon="call" label="Ligar" onPress={() => Linking.openURL(`tel:${schedule.customer?.phone ?? ''}`)} /> : null}
+              {schedule.customer?.whatsapp ? <IconAction icon="chat" label="Whats" onPress={() => openWhatsApp(schedule.customer?.whatsapp ?? '')} /> : null}
             </View>
           </Card>
 
           <Card>
-            <PanelHeader title="Execução do atendimento" detail={nextActionText(canCheckIn, canAttemptCheckOut, checkoutRequirements)} />
+            <PanelHeader title="Execução do atendimento" detail={nextActionText(canCheckIn, canCheckOut)} />
             <View style={[styles.actionSummary, { backgroundColor: colors.muted, borderColor: colors.border }]}>
-              <View style={[styles.actionSummaryIcon, { backgroundColor: canAttemptCheckOut && checkoutRequirements.length === 0 ? colors.success : colors.tint }]}>
-                <MaterialIcons name={canAttemptCheckOut ? 'flag' : canCheckIn ? 'my-location' : 'task-alt'} size={20} color="#ffffff" />
+              <View style={[styles.actionSummaryIcon, { backgroundColor: canCheckOut ? colors.success : colors.tint }]}>
+                <MaterialIcons name={canCheckOut ? 'flag' : canCheckIn ? 'my-location' : 'task-alt'} size={20} color="#ffffff" />
               </View>
               <View style={styles.actionSummaryText}>
                 <Text style={[styles.actionSummaryLabel, { color: colors.mutedText }]}>Próxima etapa</Text>
-                <Text style={[styles.actionSummaryValue, { color: colors.text }]}>{nextActionTitle(canCheckIn, canAttemptCheckOut, checkoutRequirements)}</Text>
+                <Text style={[styles.actionSummaryValue, { color: colors.text }]}>{nextActionTitle(canCheckIn, canCheckOut)}</Text>
               </View>
             </View>
-            {canAttemptCheckOut && checkoutRequirements.length > 0 ? (
-              <View style={styles.requirementsList}>
-                {checkoutRequirements.map((requirement) => (
-                  <RequirementItem key={requirement} text={requirement} />
-                ))}
-              </View>
-            ) : null}
             <View style={styles.timeline}>
               <TimelineItem label="Check-in" value={formatOptionalDateTime(schedule.check_in?.at)} done={Boolean(schedule.check_in?.at)} />
               <TimelineItem label="GPS check-in" value={formatCoordinates(schedule.check_in?.latitude, schedule.check_in?.longitude)} done={Boolean(schedule.check_in?.latitude && schedule.check_in?.longitude)} />
               <TimelineItem label="Check-out" value={formatOptionalDateTime(schedule.check_out?.at)} done={Boolean(schedule.check_out?.at)} />
               <TimelineItem label="GPS check-out" value={formatCoordinates(schedule.check_out?.latitude, schedule.check_out?.longitude)} done={Boolean(schedule.check_out?.latitude && schedule.check_out?.longitude)} />
             </View>
-            <TextInput
-              multiline
+            <LabeledTextArea
+              label="Observações desta etapa"
               value={observations}
               onChangeText={setObservations}
-              placeholder="Observações do atendimento"
-              placeholderTextColor={colors.mutedText}
-              style={[styles.notesInput, { backgroundColor: colors.muted, borderColor: colors.border, color: colors.text }]}
+              placeholder="Registre informações úteis sobre a chegada ou finalização"
             />
             <View style={styles.actions}>
               {canCheckIn ? (
@@ -664,16 +342,11 @@ export default function ScheduleDetailScreen() {
                 </Button>
               ) : null}
               {canCheckOut ? (
-                <Button onPress={() => handleAttendanceAction('check-out')} loading={actionLoading === 'check-out'} disabled={!canCheckOut}>
+                <Button onPress={() => handleAttendanceAction('check-out')} loading={actionLoading === 'check-out'}>
                   Registrar check-out
                 </Button>
               ) : null}
-              {canAttemptCheckOut && !canCheckOut ? (
-                <Button disabled>
-                  Check-out bloqueado
-                </Button>
-              ) : null}
-              {!canCheckIn && !canAttemptCheckOut ? <TextMuted>Nenhuma ação pendente para este atendimento.</TextMuted> : null}
+              {!canCheckIn && !canCheckOut ? <TextMuted>Nenhuma ação pendente para este atendimento.</TextMuted> : null}
             </View>
           </Card>
 
@@ -693,201 +366,38 @@ export default function ScheduleDetailScreen() {
           ) : null}
 
           {schedule.order ? (
-            <View onLayout={(event) => { sectionOffsets.current.report = event.nativeEvent.layout.y; }}>
-              <Card>
-                <PanelHeader title="Relatório técnico" detail={schedule.order.technician_attended_at ? `Atualizado em ${formatDateTime(schedule.order.technician_attended_at)}` : 'Diagnóstico e solução do atendimento'} />
-                <TextInput
-                  multiline
-                  value={reportForm.diagnosis}
-                  onChangeText={(value) => setReportForm((current) => ({ ...current, diagnosis: value }))}
-                  placeholder="Diagnóstico encontrado"
-                  placeholderTextColor={colors.mutedText}
-                  style={[styles.notesInput, { backgroundColor: colors.muted, borderColor: colors.border, color: colors.text }]}
-                />
-                <TextInput
-                  multiline
-                  value={reportForm.solution}
-                  onChangeText={(value) => setReportForm((current) => ({ ...current, solution: value }))}
-                  placeholder="Solução aplicada"
-                  placeholderTextColor={colors.mutedText}
-                  style={[styles.notesInput, { backgroundColor: colors.muted, borderColor: colors.border, color: colors.text }]}
-                />
-                <TextInput
-                  multiline
-                  value={reportForm.observations}
-                  onChangeText={(value) => setReportForm((current) => ({ ...current, observations: value }))}
-                  placeholder="Observações finais"
-                  placeholderTextColor={colors.mutedText}
-                  style={[styles.notesInput, { backgroundColor: colors.muted, borderColor: colors.border, color: colors.text }]}
-                />
-                <Button onPress={handleSaveReport} loading={reportLoading}>
-                  Salvar relatório
-                </Button>
-              </Card>
-            </View>
-          ) : null}
-
-          {schedule.order && checklistItems.length > 0 ? (
             <Card>
-<<<<<<< HEAD
-              <PanelHeader title="Checklist técnico" detail={`${savedChecklistItems.length}/${checklistItems.length} itens salvos`} />
-              <View style={styles.checklistList}>
-                {checklistItems.map((item) => (
-                  <ChecklistItem
-                    key={item}
-                    label={item}
-                    checked={checklistFormItems.includes(item)}
-                    onPress={() => handleToggleChecklistItem(item)}
-                  />
-                ))}
-              </View>
-              {isChecklistComplete(schedule) ? (
-                <DataNote icon="verified" title="Checklist concluído" detail="Todos os itens obrigatórios foram salvos." />
-              ) : null}
-              <Button onPress={handleSaveChecklist} loading={checklistLoading} disabled={!isChecklistDirty}>
-                Salvar checklist
-=======
               <PanelHeader
-                title="Relatorio tecnico"
-                detail={schedule.order.technician_attended_at ? `Atualizado em ${formatDateTime(schedule.order.technician_attended_at)}` : 'Diagnostico e solucao do atendimento'}
+                title="Relatório técnico"
+                detail={schedule.order.technician_attended_at ? `Atualizado em ${formatDateTime(schedule.order.technician_attended_at)}` : 'Diagnóstico e solução do atendimento'}
               />
-              <TextInput
-                multiline
+              <LabeledTextArea
+                label="Diagnóstico"
                 value={reportForm.diagnosis}
                 onChangeText={(value) => setReportForm((current) => ({ ...current, diagnosis: value }))}
-                placeholder="Diagnostico encontrado"
-                placeholderTextColor={colors.mutedText}
-                style={[styles.notesInput, { backgroundColor: colors.muted, borderColor: colors.border, color: colors.text }]}
+                placeholder="Descreva o problema encontrado"
               />
-              <TextInput
-                multiline
+              <LabeledTextArea
+                label="Solução aplicada"
                 value={reportForm.solution}
                 onChangeText={(value) => setReportForm((current) => ({ ...current, solution: value }))}
-                placeholder="Solucao aplicada"
-                placeholderTextColor={colors.mutedText}
-                style={[styles.notesInput, { backgroundColor: colors.muted, borderColor: colors.border, color: colors.text }]}
+                placeholder="Descreva o serviço executado"
               />
-              <TextInput
-                multiline
+              <LabeledTextArea
+                label="Observações finais"
                 value={reportForm.observations}
                 onChangeText={(value) => setReportForm((current) => ({ ...current, observations: value }))}
-                placeholder="Observacoes finais"
-                placeholderTextColor={colors.mutedText}
-                style={[styles.notesInput, { backgroundColor: colors.muted, borderColor: colors.border, color: colors.text }]}
+                placeholder="Inclua recomendações ou informações adicionais"
               />
               <Button onPress={handleSaveReport} loading={reportLoading}>
-                Salvar relatorio
->>>>>>> 2b7653d (Push)
+                Salvar relatório
               </Button>
             </Card>
           ) : null}
 
           {schedule.order ? (
             <Card>
-<<<<<<< HEAD
-              <PanelHeader title="Pagamento local" detail={`Saldo: ${formatMoney(paymentSummary.remaining)} de ${formatMoney(paymentSummary.total)}`} />
-              <View style={styles.paymentSummaryGrid}>
-                <PaymentMetric label="Total da OS" value={formatMoney(paymentSummary.total)} />
-                <PaymentMetric label="Pago" value={formatMoney(paymentSummary.paid)} />
-                <PaymentMetric label="Saldo" value={formatMoney(paymentSummary.remaining)} />
-              </View>
-              {schedule.order.technician_local_payment_received ? (
-                <DataNote
-<<<<<<< HEAD
-                  icon="verified"
-                  title="Pagamento registrado pelo técnico"
-=======
-                  icon={schedule.order.technician_local_payment_status === 'confirmed' ? 'verified' : 'pending-actions'}
-                  title={
-                    schedule.order.technician_local_payment_status === 'confirmed'
-                      ? 'Pagamento conferido no caixa'
-                      : 'Pagamento aguardando conferencia'
-                  }
->>>>>>> b28bf68ccd1ee2a12e680d8ff531859bc1f402b9
-                  detail={`${formatMoney(Number(schedule.order.technician_local_payment_amount ?? 0))} - ${paymentMethodLabel(schedule.order.technician_local_payment_method)}`}
-                />
-              ) : null}
-              <View style={styles.paymentMethods}>
-                {paymentMethods.map((method) => (
-                  <Pressable
-                    key={method.value}
-                    onPress={() => setPaymentForm((current) => ({ ...current, method: method.value }))}
-                    style={({ pressed }) => [
-                      styles.paymentMethodButton,
-                      {
-                        backgroundColor: paymentForm.method === method.value ? colors.accent : colors.muted,
-                        borderColor: paymentForm.method === method.value ? colors.accent : colors.border,
-                        opacity: pressed ? 0.72 : 1,
-                      },
-                    ]}>
-                    <MaterialIcons name={method.icon} size={17} color={paymentForm.method === method.value ? '#ffffff' : colors.text} />
-                    <Text style={[styles.paymentMethodText, { color: paymentForm.method === method.value ? '#ffffff' : colors.text }]}>{method.label}</Text>
-                  </Pressable>
-                ))}
-              </View>
-              <TextInput
-                value={paymentForm.amount}
-                onChangeText={(value) => setPaymentForm((current) => ({ ...current, amount: value }))}
-                placeholder="Valor recebido"
-                placeholderTextColor={colors.mutedText}
-                keyboardType="decimal-pad"
-                style={[styles.paymentInput, { backgroundColor: colors.muted, borderColor: colors.border, color: colors.text }]}
-              />
-              <TextInput
-                multiline
-                value={paymentForm.notes}
-                onChangeText={(value) => setPaymentForm((current) => ({ ...current, notes: value }))}
-                placeholder="Observação do pagamento"
-                placeholderTextColor={colors.mutedText}
-                style={[styles.notesInput, { backgroundColor: colors.muted, borderColor: colors.border, color: colors.text }]}
-              />
-              <Button onPress={handleRecordPayment} loading={paymentLoading}>
-                Enviar para conferencia
-              </Button>
-            </Card>
-          ) : null}
-
-          {schedule.order ? (
-            <View onLayout={(event) => { sectionOffsets.current.images = event.nativeEvent.layout.y; }}>
-              <Card>
-                <PanelHeader title="Imagens do atendimento" detail={`${images.length}/${imageLimit} imagens anexadas`} />
-                <View style={styles.quickActions}>
-                  <IconAction icon="photo-camera" label={imageLoading ? 'Enviando' : 'Câmera'} onPress={() => handlePickImage('camera')} disabled={imageLoading || !canUploadImage} />
-                  <IconAction icon="photo-library" label="Galeria" onPress={() => handlePickImage('library')} disabled={imageLoading || !canUploadImage} />
-                </View>
-                {!canUploadImage ? <TextMuted>Limite de imagens atingido para esta OS.</TextMuted> : null}
-                {images.length > 0 ? (
-                  <View style={styles.imageGrid}>
-                    {images.map((image) => (
-                      <View key={image.id} style={[styles.imageTile, { borderColor: colors.border, backgroundColor: colors.muted }]}>
-                        <Pressable onPress={() => setSelectedImage(image)} style={styles.imagePreviewButton}>
-                          <Image source={{ uri: getOrderImageUrl(baseUrl, schedule.order?.order_number, image.filename) }} style={styles.orderImage} resizeMode="cover" />
-                        </Pressable>
-                        <Pressable
-                          disabled={imageLoading}
-                          onPress={() => handleConfirmDeleteImage(image)}
-                          style={({ pressed }) => [styles.deleteImageButton, pressed && styles.pressed]}>
-                          <MaterialIcons name="delete" size={18} color="#ffffff" />
-                        </Pressable>
-                      </View>
-                    ))}
-                  </View>
-                ) : (
-                  <TextMuted>Nenhuma imagem anexada.</TextMuted>
-                )}
-              </Card>
-            </View>
-          ) : null}
-
-          <ImagePreviewModal
-            image={selectedImage}
-            imageUri={selectedImage && schedule.order ? getOrderImageUrl(baseUrl, schedule.order.order_number, selectedImage.filename) : null}
-            loading={imageLoading}
-            onClose={() => setSelectedImage(null)}
-            onDelete={(image) => handleConfirmDeleteImage(image)}
-          />
-=======
-              <PanelHeader title="Checklist tecnico" detail={equipmentChecklistDetail(equipmentChecklist)} />
+              <PanelHeader title="Checklist técnico" detail={equipmentChecklistDetail(equipmentChecklist)} />
               {equipmentChecklist.length > 0 ? (
                 <View style={styles.materialList}>
                   {equipmentChecklist.map((item) => (
@@ -973,7 +483,7 @@ export default function ScheduleDetailScreen() {
               />
             </View>
             {schedule.local_payment?.received ? (
-              <TextMuted>Pagamento marcado no agendamento. Este valor nao foi lancado no caixa.</TextMuted>
+              <TextMuted>Pagamento marcado no agendamento. Este valor não foi lançado no caixa.</TextMuted>
             ) : null}
             <Button onPress={handleRecordPayment} loading={paymentLoading}>
               {schedule.local_payment?.received ? 'Atualizar valor pago' : 'Marcar pago no local'}
@@ -983,7 +493,7 @@ export default function ScheduleDetailScreen() {
           <Card>
             <PanelHeader title="Fotos do atendimento" detail={`${images.length}/4 fotos anexadas`} />
             <View style={styles.quickActions}>
-              <IconAction icon="photo-camera" label={imageLoading ? 'Enviando' : 'Camera'} onPress={() => handlePickImage('camera')} disabled={imageLoading || images.length >= 4} />
+              <IconAction icon="photo-camera" label={imageLoading ? 'Enviando' : 'Câmera'} onPress={() => handlePickImage('camera')} disabled={imageLoading || images.length >= 4} />
               <IconAction icon="photo-library" label="Galeria" onPress={() => handlePickImage('library')} disabled={imageLoading || images.length >= 4} />
             </View>
             {images.length > 0 ? (
@@ -993,7 +503,9 @@ export default function ScheduleDetailScreen() {
                     <Image source={{ uri: getScheduleImageUrl(baseUrl, image.schedule_id, image.filename) }} style={styles.scheduleImage} resizeMode="cover" />
                     <Pressable
                       disabled={imageLoading}
-                      onPress={() => handleDeleteImage(image)}
+                      accessibilityRole="button"
+                      accessibilityLabel="Remover foto do atendimento"
+                      onPress={() => confirmDeleteImage(image)}
                       style={({ pressed }) => [styles.deleteImageButton, pressed && styles.pressed]}>
                       <MaterialIcons name="delete" size={18} color="#ffffff" />
                     </Pressable>
@@ -1005,12 +517,14 @@ export default function ScheduleDetailScreen() {
             )}
           </Card>
 
->>>>>>> 2b7653d (Push)
         </>
       ) : (
-        <Card>
-          <TextMuted>{loading ? 'Carregando atendimento...' : 'Atendimento não encontrado.'}</TextMuted>
-        </Card>
+        <View style={[styles.loadingState, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          {loading ? <ActivityIndicator color={colors.tint} /> : <MaterialIcons name="error-outline" size={28} color={colors.icon} />}
+          <Text style={[styles.loadingText, { color: colors.mutedText }]}>
+            {loading ? 'Carregando atendimento...' : 'Atendimento não encontrado.'}
+          </Text>
+        </View>
       )}
     </AppShell>
   );
@@ -1025,18 +539,44 @@ function PanelHeader({ title, detail }: { title: string; detail: string }) {
   );
 }
 
-function nextActionText(canCheckIn: boolean, canAttemptCheckOut: boolean, requirements: string[]) {
+function LabeledTextArea({
+  label,
+  value,
+  onChangeText,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChangeText: (value: string) => void;
+  placeholder: string;
+}) {
+  const colors = Colors[useColorScheme() ?? 'light'];
+
+  return (
+    <View style={styles.inputField}>
+      <Text style={[styles.inputLabel, { color: colors.mutedText }]}>{label}</Text>
+      <TextInput
+        multiline
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor={colors.mutedText}
+        style={[styles.notesInput, { backgroundColor: colors.muted, borderColor: colors.border, color: colors.text }]}
+      />
+    </View>
+  );
+}
+
+function nextActionText(canCheckIn: boolean, canCheckOut: boolean) {
   if (canCheckIn) return 'Próxima ação: registrar chegada ao cliente.';
-  if (canAttemptCheckOut && requirements.length === 0) return 'Próxima ação: finalizar atendimento no local.';
-  if (canAttemptCheckOut) return 'Conclua as pendências para liberar o check-out.';
+  if (canCheckOut) return 'Próxima ação: finalizar atendimento no local.';
 
   return 'Atendimento sem ação pendente.';
 }
 
-function nextActionTitle(canCheckIn: boolean, canAttemptCheckOut: boolean, requirements: string[]) {
+function nextActionTitle(canCheckIn: boolean, canCheckOut: boolean) {
   if (canCheckIn) return 'Registrar chegada ao cliente';
-  if (canAttemptCheckOut && requirements.length === 0) return 'Finalizar atendimento no local';
-  if (canAttemptCheckOut) return 'Pendências antes do check-out';
+  if (canCheckOut) return 'Finalizar atendimento no local';
 
   return 'Atendimento sem pendências';
 }
@@ -1079,75 +619,6 @@ function InfoRow({
   );
 }
 
-<<<<<<< HEAD
-function PaymentMetric({ label, value }: { label: string; value: string }) {
-  const colors = Colors[useColorScheme() ?? 'light'];
-
-  return (
-    <View style={[styles.paymentMetric, { backgroundColor: colors.muted, borderColor: colors.border }]}>
-      <Text style={[styles.infoLabel, { color: colors.mutedText }]}>{label}</Text>
-      <Text style={[styles.paymentMetricValue, { color: colors.text }]}>{value}</Text>
-    </View>
-  );
-}
-
-function DataNote({
-  icon,
-  title,
-  detail,
-}: {
-  icon: keyof typeof MaterialIcons.glyphMap;
-  title: string;
-  detail: string;
-}) {
-  const colors = Colors[useColorScheme() ?? 'light'];
-
-  return (
-    <View style={[styles.dataNote, { backgroundColor: colors.muted, borderColor: colors.border }]}>
-      <MaterialIcons name={icon} size={20} color={colors.success} />
-      <View style={styles.infoText}>
-        <Text style={[styles.infoLabel, { color: colors.mutedText }]}>{title}</Text>
-        <Text style={[styles.infoValue, { color: colors.text }]}>{detail}</Text>
-      </View>
-    </View>
-  );
-}
-
-function RequirementItem({ text }: { text: string }) {
-  const colors = Colors[useColorScheme() ?? 'light'];
-
-  return (
-    <View style={[styles.requirementItem, { backgroundColor: colors.muted, borderColor: colors.border }]}>
-      <MaterialIcons name="error-outline" size={18} color="#a05a00" />
-      <Text style={[styles.requirementText, { color: colors.text }]}>{text}</Text>
-    </View>
-  );
-}
-
-function ChecklistItem({ label, checked, onPress }: { label: string; checked: boolean; onPress: () => void }) {
-  const colors = Colors[useColorScheme() ?? 'light'];
-
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.checklistItem,
-        {
-          backgroundColor: checked ? `${colors.success}12` : colors.muted,
-          borderColor: checked ? colors.success : colors.border,
-          opacity: pressed ? 0.72 : 1,
-        },
-      ]}>
-      <View style={[styles.checklistBox, { backgroundColor: checked ? colors.success : 'transparent', borderColor: checked ? colors.success : colors.border }]}>
-        {checked ? <MaterialIcons name="check" size={16} color="#ffffff" /> : null}
-      </View>
-      <Text style={[styles.checklistText, { color: colors.text }]}>{label}</Text>
-    </Pressable>
-  );
-}
-
-=======
->>>>>>> 2b7653d (Push)
 function IconAction({
   icon,
   label,
@@ -1177,46 +648,6 @@ function IconAction({
   );
 }
 
-function ImagePreviewModal({
-  image,
-  imageUri,
-  loading,
-  onClose,
-  onDelete,
-}: {
-  image: OrderImage | null;
-  imageUri: string | null;
-  loading: boolean;
-  onClose: () => void;
-  onDelete: (image: OrderImage) => void;
-}) {
-  const colors = Colors[useColorScheme() ?? 'light'];
-
-  if (!image || !imageUri) return null;
-
-  return (
-    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.previewOverlay}>
-        <View style={[styles.previewHeader, { paddingTop: 18 }]}>
-          <Pressable onPress={onClose} style={({ pressed }) => [styles.previewIconButton, pressed && styles.pressed]}>
-            <MaterialIcons name="close" size={24} color="#ffffff" />
-          </Pressable>
-          <Pressable
-            disabled={loading}
-            onPress={() => onDelete(image)}
-            style={({ pressed }) => [styles.previewIconButton, { opacity: loading ? 0.58 : pressed ? 0.72 : 1 }]}>
-            <MaterialIcons name="delete" size={22} color="#ffffff" />
-          </Pressable>
-        </View>
-        <Image source={{ uri: imageUri }} style={styles.previewImage} resizeMode="contain" />
-        <View style={styles.previewFooter}>
-          <Text style={[styles.previewText, { color: colors.accentText }]}>Imagem do atendimento</Text>
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
 function TimelineItem({ label, value, done }: { label: string; value: string; done: boolean }) {
   const colors = Colors[useColorScheme() ?? 'light'];
 
@@ -1231,187 +662,6 @@ function TimelineItem({ label, value, done }: { label: string; value: string; do
       </View>
     </View>
   );
-}
-
-function getChecklistItems(schedule: TechnicianSchedule | null) {
-  return normalizeChecklistItems(schedule?.order?.equipment?.checklist_items ?? []);
-}
-
-function getCompletedChecklistItems(schedule: TechnicianSchedule | null) {
-  return normalizeChecklistItems(schedule?.order?.technician_checklist_items ?? []);
-}
-
-function getChecklistFormItems(schedule: TechnicianSchedule | null) {
-  const requiredItems = getChecklistItems(schedule);
-  const completedItems = getCompletedChecklistItems(schedule);
-
-  if (requiredItems.length === 0) return completedItems;
-
-  const requiredSet = new Set(requiredItems);
-
-  return completedItems.filter((item) => requiredSet.has(item));
-}
-
-function isReportReady(schedule: TechnicianSchedule | null) {
-  const order = schedule?.order;
-
-  return Boolean(order?.technician_diagnosis?.trim() && order.technician_solution?.trim());
-}
-
-function isChecklistComplete(schedule: TechnicianSchedule | null) {
-  const requiredItems = getChecklistItems(schedule);
-
-  if (requiredItems.length === 0) return true;
-
-  const completedItems = new Set(getCompletedChecklistItems(schedule));
-
-  return requiredItems.every((item) => completedItems.has(item));
-}
-
-function getCheckoutRequirements(schedule: TechnicianSchedule | null, pendingActions: PendingScheduleActions | null) {
-  if (!schedule?.order) return [];
-
-  const requirements: string[] = [];
-
-  if (pendingActions?.report || pendingActions?.checklist) {
-    requirements.push('Sincronizar alterações salvas offline.');
-  }
-
-  if (!isReportReady(schedule)) {
-    requirements.push('Salvar diagnóstico e solução do relatório técnico.');
-  }
-
-  if (!isChecklistComplete(schedule)) {
-    requirements.push('Concluir e salvar todos os itens do checklist.');
-  }
-
-  return requirements;
-}
-
-function pendingActionsDetail(pendingActions: PendingScheduleActions) {
-  const actions = [
-    pendingActions.report ? 'relatório' : null,
-    pendingActions.checklist ? 'checklist' : null,
-  ].filter(Boolean);
-
-  if (actions.length === 0) return 'Aguardando sincronização.';
-
-  return `${actions.join(' e ')} aguardando sincronização.`;
-}
-
-function sameStringSet(first: string[], second: string[]) {
-  const normalizedFirst = normalizeChecklistItems(first);
-  const normalizedSecond = normalizeChecklistItems(second);
-
-  if (normalizedFirst.length !== normalizedSecond.length) return false;
-
-  const secondSet = new Set(normalizedSecond);
-
-  return normalizedFirst.every((item) => secondSet.has(item));
-}
-
-function normalizeChecklistItems(items: string[]) {
-  return Array.from(new Set(items.map((item) => item.trim()).filter((item) => item.length > 0)));
-}
-
-function getScheduleCacheKey(tenantId: number, scheduleId: number) {
-  return `@VetorTecnico:schedule:${tenantId}:${scheduleId}`;
-}
-
-function getPendingScheduleKey(tenantId: number, scheduleId: number) {
-  return `@VetorTecnico:pending-schedule:${tenantId}:${scheduleId}`;
-}
-
-async function savePendingScheduleAction(
-  tenantId: number | undefined,
-  scheduleId: number,
-  patch: Partial<PendingScheduleActions>,
-  setPendingActions: Dispatch<SetStateAction<PendingScheduleActions | null>>,
-) {
-  if (!tenantId) return;
-
-  const key = getPendingScheduleKey(tenantId, scheduleId);
-  const current = (await readCache<PendingScheduleActions>(key)) ?? { savedAt: new Date().toISOString() };
-  const next = {
-    ...current,
-    ...patch,
-    savedAt: new Date().toISOString(),
-  };
-
-  await AsyncStorage.setItem(key, JSON.stringify(next));
-  setPendingActions(next);
-}
-
-async function removePendingScheduleAction(
-  tenantId: number | undefined,
-  scheduleId: number,
-  action: 'report' | 'checklist',
-  setPendingActions: Dispatch<SetStateAction<PendingScheduleActions | null>>,
-) {
-  if (!tenantId) return;
-
-  const key = getPendingScheduleKey(tenantId, scheduleId);
-  const current = await readCache<PendingScheduleActions>(key);
-
-  if (!current) return;
-
-  const next: PendingScheduleActions = { ...current, savedAt: new Date().toISOString() };
-  delete next[action];
-
-  if (!next.report && !next.checklist) {
-    await AsyncStorage.removeItem(key);
-    setPendingActions(null);
-    return;
-  }
-
-  await AsyncStorage.setItem(key, JSON.stringify(next));
-  setPendingActions(next);
-}
-
-function applyReportToSchedule(
-  schedule: TechnicianSchedule,
-  report: NonNullable<PendingScheduleActions['report']>,
-) {
-  if (!schedule.order) return schedule;
-
-  return {
-    ...schedule,
-    order: {
-      ...schedule.order,
-      technician_diagnosis: report.technician_diagnosis ?? null,
-      technician_solution: report.technician_solution ?? null,
-      technician_observations: report.technician_observations ?? null,
-      technician_attended_at: schedule.order.technician_attended_at ?? new Date().toISOString(),
-    },
-  };
-}
-
-function applyChecklistToSchedule(schedule: TechnicianSchedule, items: string[]) {
-  if (!schedule.order) return schedule;
-
-  const normalizedItems = normalizeChecklistItems(items);
-
-  return {
-    ...schedule,
-    order: {
-      ...schedule.order,
-      technician_checklist_items: normalizedItems,
-      technician_checklist_completed_at: normalizedItems.length > 0 ? new Date().toISOString() : null,
-    },
-  };
-}
-
-async function readCache<T>(key: string) {
-  const value = await AsyncStorage.getItem(key);
-
-  if (!value) return null;
-
-  try {
-    return JSON.parse(value) as T;
-  } catch {
-    await AsyncStorage.removeItem(key);
-    return null;
-  }
 }
 
 function formatAddress(schedule: TechnicianSchedule | null) {
@@ -1430,41 +680,18 @@ function getMapsUrl(address: string | null) {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
 }
 
-function getPhoneUrl(phone: string | null | undefined) {
-  const digits = phone?.replace(/\D/g, '') ?? '';
-
-  return digits ? `tel:${digits}` : null;
-}
-
-function getWhatsAppUrl(phone: string | null | undefined) {
-  const digits = phone?.replace(/\D/g, '') ?? '';
-
-  if (!digits) return null;
-
+function openWhatsApp(phone: string) {
+  const digits = phone.replace(/\D/g, '');
   const normalized = digits.length > 11 ? digits : `55${digits}`;
 
-  return `https://wa.me/${normalized}`;
-}
-
-function getImageLimit(schedule: TechnicianSchedule | null, currentImages: number) {
-  const remainingImages = schedule?.available_actions?.remaining_images;
-
-  return typeof remainingImages === 'number' ? currentImages + remainingImages : 4;
-}
-
-function showPermissionSettingsAlert(title: string, message: string) {
-  Alert.alert(title, message, [
-    { text: 'Agora não', style: 'cancel' },
-    { text: 'Abrir ajustes', onPress: () => Linking.openSettings().catch(() => undefined) },
-  ]);
+  Linking.openURL(`https://wa.me/${normalized}`);
 }
 
 async function getCurrentCoordinates() {
   const permission = await Location.requestForegroundPermissionsAsync();
 
   if (permission.status !== Location.PermissionStatus.GRANTED) {
-    showPermissionSettingsAlert('Localização', 'Permita o acesso à localização para registrar check-in e check-out.');
-    throw new ApiError('Permita o acesso à localização para registrar a ação.', 422);
+    throw new ApiError('Permita o acesso a localizacao para registrar a acao.', 422);
   }
 
   const position = await Location.getCurrentPositionAsync({
@@ -1481,12 +708,7 @@ async function launchCamera() {
   const permission = await ImagePicker.requestCameraPermissionsAsync();
 
   if (permission.status !== ImagePicker.PermissionStatus.GRANTED) {
-<<<<<<< HEAD
-    showPermissionSettingsAlert('Câmera', 'Permita o acesso à câmera para anexar imagens do atendimento.');
-    throw new ApiError('Permita o acesso à câmera para anexar imagens.', 422);
-=======
     throw new ApiError('Permita o acesso a camera para anexar fotos.', 422);
->>>>>>> 2b7653d (Push)
   }
 
   return ImagePicker.launchCameraAsync({
@@ -1500,12 +722,7 @@ async function launchLibrary() {
   const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
   if (permission.status !== ImagePicker.PermissionStatus.GRANTED) {
-<<<<<<< HEAD
-    showPermissionSettingsAlert('Galeria', 'Permita o acesso à galeria para anexar imagens do atendimento.');
-    throw new ApiError('Permita o acesso à galeria para anexar imagens.', 422);
-=======
     throw new ApiError('Permita o acesso a galeria para anexar fotos.', 422);
->>>>>>> 2b7653d (Push)
   }
 
   return ImagePicker.launchImageLibraryAsync({
@@ -1545,7 +762,7 @@ function formatOptionalDateTime(value: string | null | undefined) {
 }
 
 function formatCoordinates(latitude: string | number | null | undefined, longitude: string | number | null | undefined) {
-  if (!latitude || !longitude) return 'Não registrado';
+  if (!latitude || !longitude) return 'Nao registrado';
 
   const lat = Number(latitude);
   const lng = Number(longitude);
@@ -1634,16 +851,11 @@ function formatCurrency(value: string | number | null | undefined) {
   });
 }
 
-<<<<<<< HEAD
-function paymentMethodLabel(value: string | null | undefined) {
-  return paymentMethods.find((method) => method.value === value)?.label ?? 'Não informado';
-=======
 function formatDecimalCurrency(value: number) {
   return value.toLocaleString('pt-BR', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
->>>>>>> 2b7653d (Push)
 }
 
 function normalizeText(value: string) {
@@ -1654,32 +866,23 @@ function normalizeText(value: string) {
 
 const styles = StyleSheet.create({
   pageHeader: {
-    marginHorizontal: -16,
-    marginTop: -18,
-    borderBottomLeftRadius: 22,
-    borderBottomRightRadius: 22,
-    paddingHorizontal: 18,
-    paddingTop: 18,
-    paddingBottom: 22,
-    gap: 20,
-    overflow: 'hidden',
-  },
-  headerActions: {
-    minHeight: 40,
+    borderRadius: 16,
+    padding: 18,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 12,
   },
   headerIconButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 8,
+    width: 36,
+    height: 36,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.08)',
   },
   headerTitleWrap: {
-    gap: 2,
+    flex: 1,
+    minWidth: 0,
   },
   headerEyebrow: {
     color: 'rgba(255, 255, 255, 0.72)',
@@ -1690,8 +893,8 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     color: '#ffffff',
-    fontSize: 27,
-    lineHeight: 33,
+    fontSize: 23,
+    lineHeight: 29,
     fontWeight: '900',
   },
   headerDetail: {
@@ -1778,7 +981,7 @@ const styles = StyleSheet.create({
     minWidth: 0,
     minHeight: 42,
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: 12,
     paddingHorizontal: 8,
     flexDirection: 'row',
     alignItems: 'center',
@@ -1797,7 +1000,7 @@ const styles = StyleSheet.create({
   actionSummary: {
     minHeight: 72,
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: 14,
     padding: 12,
     flexDirection: 'row',
     alignItems: 'center',
@@ -1806,7 +1009,7 @@ const styles = StyleSheet.create({
   actionSummaryIcon: {
     width: 40,
     height: 40,
-    borderRadius: 8,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1829,7 +1032,7 @@ const styles = StyleSheet.create({
   timelineItem: {
     minHeight: 62,
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: 14,
     padding: 12,
     flexDirection: 'row',
     alignItems: 'center',
@@ -1838,7 +1041,7 @@ const styles = StyleSheet.create({
   timelineIcon: {
     width: 32,
     height: 32,
-    borderRadius: 8,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1849,76 +1052,31 @@ const styles = StyleSheet.create({
   notesInput: {
     minHeight: 112,
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: 12,
     padding: 12,
     fontSize: 15,
     lineHeight: 21,
     textAlignVertical: 'top',
   },
+  inputField: {
+    gap: 7,
+  },
+  inputLabel: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+  },
   actions: {
     gap: 10,
   },
-<<<<<<< HEAD
-  requirementsList: {
-    gap: 8,
-  },
-  requirementItem: {
-    minHeight: 46,
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 9,
-  },
-  requirementText: {
-    flex: 1,
-    minWidth: 0,
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: '800',
-  },
-  checklistList: {
-    gap: 10,
-  },
-  checklistItem: {
-    minHeight: 52,
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  checklistBox: {
-    width: 24,
-    height: 24,
-    borderRadius: 6,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  checklistText: {
-    flex: 1,
-    minWidth: 0,
-    fontSize: 15,
-    lineHeight: 21,
-    fontWeight: '800',
-  },
-  paymentSummaryGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-=======
   materialList: {
->>>>>>> 2b7653d (Push)
     gap: 10,
   },
   materialItem: {
     minHeight: 58,
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: 12,
     padding: 12,
     flexDirection: 'row',
     alignItems: 'center',
@@ -1937,7 +1095,7 @@ const styles = StyleSheet.create({
   paymentIcon: {
     width: 44,
     height: 44,
-    borderRadius: 8,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1951,7 +1109,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 48,
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: 12,
     paddingHorizontal: 12,
     fontSize: 16,
     lineHeight: 22,
@@ -1965,19 +1123,11 @@ const styles = StyleSheet.create({
   imageTile: {
     width: 112,
     height: 112,
-    borderRadius: 8,
+    borderRadius: 14,
     borderWidth: 1,
     overflow: 'hidden',
   },
-<<<<<<< HEAD
-  imagePreviewButton: {
-    width: '100%',
-    height: '100%',
-  },
-  orderImage: {
-=======
   scheduleImage: {
->>>>>>> 2b7653d (Push)
     width: '100%',
     height: '100%',
   },
@@ -1987,45 +1137,23 @@ const styles = StyleSheet.create({
     right: 6,
     width: 32,
     height: 32,
-    borderRadius: 8,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(15, 23, 36, 0.74)',
   },
-  previewOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(8, 13, 22, 0.96)',
-  },
-  previewHeader: {
-    minHeight: 72,
-    paddingHorizontal: 14,
-    paddingBottom: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  previewIconButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 8,
+  loadingState: {
+    minHeight: 180,
+    borderWidth: 1,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    gap: 12,
   },
-  previewImage: {
-    flex: 1,
-    width: '100%',
-  },
-  previewFooter: {
-    minHeight: 54,
-    paddingHorizontal: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  previewText: {
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: '800',
+  loadingText: {
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '700',
   },
   pressed: {
     opacity: 0.72,
